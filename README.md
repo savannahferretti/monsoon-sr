@@ -7,7 +7,12 @@ By A. A. Author<sup>1</sup>, B. B. Author<sup>1</sup>, & C. C. Author<sup>2</sup
 
 <sup>2</sup>Department, Organization, City, State, Country
 
-**Status:** This manuscript has been submitted for publication at ```<JOURNAL>```. The ```<PAPER>``` was published in ```<JOURNAL>``` in ```<MONTH, YEAR>```. ```<SUPPORTING_INFORMATION>``` is also available.  We welcome any comments, questions, or suggestions. Please email your feedback to ```<MAIN_AUTHOR>``` (```<EMAIL>```).
+**Status:** This manuscript has been submitted for publication at ```<JOURNAL>```. The ```<PAPER>``` was published in ```<JOURNAL>``` in ```<MONTH, YEAR>```. ```<SUPPORTING_INFORMATION>``` is also available.  We welcome any comments, questions, or suggestions. Please email your feedback to Savannah L. Ferretti (savannah.ferretti@uci.edu).
+
+**Key Points**:
+- Point 1
+- Point 2
+- Point 3
 
 **Abstract**: Insert abstract text here.
 
