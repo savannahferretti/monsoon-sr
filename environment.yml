@@ -1,0 +1,22 @@
+name: monsoon-sr
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - ipykernel
+  - basemap
+  - bottleneck
+  - cartopy
+  - dask
+  - matplotlib
+  - netcdf4
+  - numpy
+  - proplot
+  - scipy
+  - sympy
+  - xarray
+  - zarr
+  - julia
+  - pytorch
+  - scikit-learn
+prefix: /global/homes/s/sferrett/.conda/envs/monsoon-sr
