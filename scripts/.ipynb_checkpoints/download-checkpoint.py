@@ -1,4 +1,5 @@
 import os
+import re
 import gcsfs
 import fsspec
 import logging
@@ -8,35 +9,26 @@ import xarray as xr
 import planetary_computer
 from datetime import datetime
 import pystac_client as pystac
-from multiprocessing import Pool
-
-AUTHOR   = os.environ['AUTHOR']
-EMAIL    = os.environ['EMAIL']
-SAVEDIR  = os.environ['SAVEDIR']
-YEARS    = [int(year) for year in os.environ['YEARS'].split()]
-MONTHS   = [int(month) for month in os.environ['MONTHS'].split()]
-LATRANGE = tuple(float(lat) for lat in os.environ['LATRANGE'].split())
-LONRANGE = tuple(float(lon) for lon in os.environ['LONRANGE'].split())
-LEVRANGE = tuple(float(lev) for lev in os.environ['LEVRANGE'].split())
-
-# AUTHOR    = 'Savannah L. Ferretti'
-# EMAIL     = 'savannah.ferretti@uci.edu'
-# SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
-# YEARS     = [2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020]
-# MONTHS    = [6,7,8]
-# LATRANGE  = (5.,25.) 
-# LONRANGE  = (60.,90.)
-# LEVRANGE  = (500.,1000.)
+from concurrent.futures import ProcessPoolExecutor,as_completed
 
 warnings.filterwarnings('ignore')
-logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',filename='download.log',filemode='w')
+logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger()
+
+AUTHOR    = 'Savannah L. Ferretti'
+EMAIL     = 'savannah.ferretti@uci.edu'
+SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-pod/data/raw'
+YEARS     = [2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020]
+MONTHS    = [6,7,8]
+LATRANGE  = (5.,25.) 
+LONRANGE  = (60.,90.)
+LEVRANGE  = (500.,1000.)
 
 def get_era5():
     '''
     Purpose: Accesses ERA5 data stored on Google Cloud Storage and returns it for further processing.
     Returns: 
-    - ds (xarray.Dataset): ERA5 data
+    - ds (xarray.Dataset): full ERA5 Dataset
     '''
     store = 'gs://gcp-public-data-arco-era5/ar/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2/'
     ds    = xr.open_zarr(store,decode_times=True)  
@@ -46,7 +38,7 @@ def get_imerg():
     '''
     Purpose: Accesses IMERG V06 data stored on Microsoft Planetary Computer and returns it for further processing.
     Returns: 
-    - ds (xarray.Dataset): IMERG V06 data
+    - ds (xarray.Dataset): full IMERG V06 Dataset
     '''
     store   = 'https://planetarycomputer.microsoft.com/api/stac/v1'
     catalog = pystac.Client.open(store,modifier=planetary_computer.sign_inplace)
@@ -82,14 +74,14 @@ def standardize(da):
     
 def subset(ds,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE):
     '''
-    Purpose: Subsets an xarray.Dataset based on specified time, latitude, longitude, and level ranges.
+    Purpose: Subsets an xarray.Dataset based on specified time, latitude, longitude, and pressure level ranges.
     Args:
     - ds (xarray.Dataset): input Dataset
-    - years (list): list of years to include
-    - months (list): list of months to include
-    - latrange (tuple): (minimum latitude, maximum latitude)
-    - lonrange (tuple): (minimum longitude, maximum longitude)
-    - levrange (tuple): (minimum pressure level, maximum pressure level)
+    - years (list): list of years to include (defaults to YEARS)
+    - months (list): list of months to include (defaults to MONTHS)
+    - latrange (tuple): minimum and maximum latitude (defaults to LATRANGE)
+    - lonrange (tuple): minimum and maximum longitude (defaults to LONRANGE)
+    - levrange (tuple): minimum and maximum pressure levels (defaults to LEVRANGE)    
     Returns:
     - ds (xarray.Dataset): subsetted Dataset
     '''    
@@ -107,13 +99,13 @@ def preprocess(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LA
     - shortname (str): variable name abbreviation
     - longname (str): full variable name
     - units (str): variable units
-    - years (list): list of years to include
-    - months (list): list of months to include
-    - latrange (tuple): (minimum latitude, maximum latitude)
-    - lonrange (tuple): (minimum longitude, maximum longitude)
-    - levrange (tuple): (minimum pressure level, maximum pressure level)
-    - author (str): author name for metadata
-    - email (str): author email for metadata
+    - years (list): list of years to include (defaults to YEARS)
+    - months (list): list of months to include (defaults to MONTHS)
+    - latrange (tuple): minimum and maximum latitude (defaults to LATRANGE)
+    - lonrange (tuple): minimum and maximum longitude (defaults to LONRANGE)
+    - levrange (tuple): minimum and maximum pressure levels (defaults to LEVRANGE)
+    - author (str): author name for metadata (defaults to AUTHOR)
+    - email (str): author email for metadata (defaults to EMAIL)
     Returns:
     - ds (xarray.Dataset): preprocessed Dataset
     '''    
@@ -132,48 +124,71 @@ def preprocess(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LA
     logger.info(f'{longname}: {ds.nbytes*1e-9:.2f} GB')
     return ds
 
-def save(args,savedir=SAVEDIR):
+def save(ds,longname,savedir=SAVEDIR):
     '''
-    Purpose: Saves an xarray.Dataset to a NetCDF file in the specified directory. It's designed to be used with 
-    multiprocessing for parallel saving of multiple datasets.
+    Purpose: Saves an xarray.Dataset to a NetCDF file in the specified directory. It records whethr saving was a success or failure.
     Args:
-    - args (tuple): (xarray.Dataset, filename)
-    - savedir (str): directory where the file should be saved
-    '''    
-    ds,filename = args
-    filepath    = f'{savedir}/{filename}'
-    logger.info(f'Saving {filename}...')
+    - ds (xarray.Dataset): processed variable Dataset to save
+    - longname (str): full variable name
+    - savedir (str): directory where the file should be saved (defaults to SAVEDIR)
+    Returns:
+    - bool: True if the save operation was successful, False otherwise
+    '''  
+    filename = re.sub(r'\s+','_',longname)+'.nc'
+    filepath = os.path.join(savedir,filename)
     try:
         ds.to_netcdf(filepath)
-        logger.info(f'Successfully saved {filename}')
+        return True
     except Exception as e:
-        logger.error(f'Error saving {filename}: {str(e)}')
+        return False
 
-if __name__=='__main__':
-    logger.info('Starting data download and processing...')
+def process_and_save(varinfo):
+    '''
+    Purpose: Processes and saves a single variable from either the ERA5 or IMERG cloud store.
+    Args:
+    - varinfo (tuple): contains the variable's source, shortname, longname, and units
+    Returns:
+    - bool: True if processing and saving was successful, False otherwise
+    '''    
+    source,shortname,longname,units = varinfo
     try:
-        logger.info('Fetching ERA5 data...')
-        era5  = get_era5()
-        logger.info('Fetching IMERG data...')
-        imerg = get_imerg()
-        logger.info('Pulling out indvidiual variables...')
-        prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24 # mm/hr to mm/day
-        psdata = era5.surface_pressure/100 # Pa to hPa
-        qdata  = era5.specific_humidity
-        tdata  = era5.temperature
-        logger.info('Preprocessing indvidiual variables...')
-        pr = preprocess(prdata,shortname='pr',longname='IMERG V06 precipitation rate',units='mm/day')
-        ps = preprocess(psdata,shortname='ps',longname='ERA5 surface pressure',units='hPa')
-        q  = preprocess(qdata,shortname='q',longname='ERA5 specific humidity',units='kg/kg')
-        t  = preprocess(tdata,shortname='t',longname='ERA5 air temperature',units='K')
-        logger.info('Starting parallel file saving...')
-        saveargs = [(pr,'IMERG_precipitation_rate.nc'),
-                    (ps,'ERA5_surface_pressure.nc'),
-                    (q,'ERA5_specific_humidity.nc'),
-                    (t,'ERA5_temperature.nc')]
-        with Pool(processes=4) as pool:
-            pool.map(save,saveargs)
-        logger.info('All files saved successfully!')
+        logger.info(f'Processing {longname}...')
+        if source=='ERA5':
+            ds = get_era5()
+            logger.info(f'Successfully fetched {source.upper()}')
+            if shortname=='ps':
+                data = ds.surface_pressure/100  # Pa to hPa
+            elif shortname=='q':
+                data = ds.specific_humidity
+            elif shortname=='t':
+                data = ds.temperature
+        elif source=='IMERG':
+            ds   = get_imerg()
+            logger.info(f'Successfully fetched {source.upper()}')
+            data = ds.precipitationCal.where((ds.precipitationCal!=-9999.9)&(ds.precipitationCal>=0), np.nan)*24  # mm/hr to mm/day
+        processed = preprocess(data,shortname=shortname,longname=longname,units=units)
+        logger.info(f'Successfully preprocessed {shortname}')
+        savesuccess = save(processed,longname)
+        if savesuccess:
+            logger.info(f'Successfully saved {shortname}')
+        else:
+            logger.warning(f'Failed to save {shortname}')
+        return savesuccess
     except Exception as e:
-        logger.error(f'An error occurred: {str(e)}')
-logger.info('Script execution completed!')
+        logger.error(f'Error processing {longname}: {str(e)}')
+        return False
+
+if __name__ == '__main__':
+    logger.info('Starting data download and processing...')
+    varinfolist = [
+        ('IMERG','pr','IMERG V06 precipitation rate','mm/day'),
+        ('ERA5','ps','ERA5 surface pressure','hPa'),
+        ('ERA5','q','ERA5 specific humidity','kg/kg'),
+        ('ERA5','t','ERA5 air temperature','K')]
+    with ProcessPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(process_and_save,varinfo) for varinfo in varinfolist]
+        results = []
+        for future in as_completed(futures):
+            results.append(future.result())
+    logger.info(f'Successfully saved {sum(results)} out of {len(vardict)} variables')
+    logger.info('Script execution completed!')

@@ -26,12 +26,15 @@ Project Organization
 ├── README.md          <- Top-level information on this code base
 │
 ├── data/
-│   ├── external/      <- Data from third party sources
+│   ├── raw/           <- Original immutable data
 │   ├── interim/       <- Intermediate data that has been transformed
-│   ├── processed/     <- Final analysis-ready data
-│   └── raw/           <- Original immutable data
+│   └── processed/     <- Final analysis-ready data
 │
 ├── figs/              <- Generated figures/graphics 
+│
+├── models/            
+│   ├── mlp/           <- PyTorch MLPs (NNs)
+│   └── pysr/          <- PySR symbolic regression models
 │
 ├── notebooks/         <- Jupyter notebooks for data analysis/visualizations
 │
