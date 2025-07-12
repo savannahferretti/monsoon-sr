@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import gcsfs
 import fsspec
 import logging
@@ -9,7 +10,6 @@ import xarray as xr
 import planetary_computer
 from datetime import datetime
 import pystac_client as pystac
-from concurrent.futures import ProcessPoolExecutor,as_completed
 
 warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
@@ -30,9 +30,14 @@ def get_era5():
     Returns: 
     - ds (xarray.Dataset): full ERA5 Dataset
     '''
-    store = 'gs://gcp-public-data-arco-era5/ar/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2/'
-    ds    = xr.open_zarr(store,decode_times=True)  
-    return ds
+    try:
+        store = 'gs://gcp-public-data-arco-era5/ar/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2/'
+        ds = xr.open_zarr(store,decode_times=True)  
+        logger.info(f'Successfully fetched ERA5')
+        return ds
+    except Exception as e:
+        logger.error(f'Failed to fetch ERA5: {str(e)}')
+        return None
 
 def get_imerg():
     '''
@@ -40,11 +45,16 @@ def get_imerg():
     Returns: 
     - ds (xarray.Dataset): full IMERG V06 Dataset
     '''
-    store   = 'https://planetarycomputer.microsoft.com/api/stac/v1'
-    catalog = pystac.Client.open(store,modifier=planetary_computer.sign_inplace)
-    assets  = catalog.get_collection('gpm-imerg-hhr').assets['zarr-abfs']
-    ds      = xr.open_zarr(fsspec.get_mapper(assets.href,**assets.extra_fields['xarray:storage_options']),consolidated=True)
-    return ds
+    try:
+        store   = 'https://planetarycomputer.microsoft.com/api/stac/v1'
+        catalog = pystac.Client.open(store,modifier=planetary_computer.sign_inplace)
+        assets  = catalog.get_collection('gpm-imerg-hhr').assets['zarr-abfs']
+        ds = xr.open_zarr(store,decode_times=True)  
+        logger.info(f'Successfully fetched IMERG')
+        return ds
+    except Exception as e:
+        logger.error(f'Failed to fetch IMERG: {str(e)}')
+        return None
 
 def standardize(da):
     '''
@@ -109,7 +119,6 @@ def preprocess(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LA
     Returns:
     - ds (xarray.Dataset): preprocessed Dataset
     '''    
-    logger.info(f'Preprocessing {longname}...')
     da = standardize(da)
     da = subset(da,years,months,latrange,lonrange,levrange)
     ds = xr.Dataset(data_vars={shortname:([*da.dims],da.data)},
@@ -124,71 +133,44 @@ def preprocess(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LA
     logger.info(f'{longname}: {ds.nbytes*1e-9:.2f} GB')
     return ds
 
-def save(ds,longname,savedir=SAVEDIR):
+def save(ds,savedir=SAVEDIR):
     '''
-    Purpose: Saves an xarray.Dataset to a NetCDF file in the specified directory. It records whethr saving was a success or failure.
+    Purpose: Saves an xarray.Dataset to a NetCDF file in the specified directory. It records whether saving was a success or failure.
     Args:
     - ds (xarray.Dataset): processed variable Dataset to save
-    - longname (str): full variable name
     - savedir (str): directory where the file should be saved (defaults to SAVEDIR)
     Returns:
     - bool: True if the save operation was successful, False otherwise
     '''  
-    filename = re.sub(r'\s+','_',longname)+'.nc'
+    filename = re.sub(r'\s+','_',ds.attrs['long_name'])+'.nc'
     filepath = os.path.join(savedir,filename)
     try:
         ds.to_netcdf(filepath)
+        logger.info(f'Successfully saved {filename}')
         return True
     except Exception as e:
-        return False
-
-def process_and_save(varinfo):
-    '''
-    Purpose: Processes and saves a single variable from either the ERA5 or IMERG cloud store.
-    Args:
-    - varinfo (tuple): contains the variable's source, shortname, longname, and units
-    Returns:
-    - bool: True if processing and saving was successful, False otherwise
-    '''    
-    source,shortname,longname,units = varinfo
-    try:
-        logger.info(f'Processing {longname}...')
-        if source=='ERA5':
-            ds = get_era5()
-            logger.info(f'Successfully fetched {source.upper()}')
-            if shortname=='ps':
-                data = ds.surface_pressure/100  # Pa to hPa
-            elif shortname=='q':
-                data = ds.specific_humidity
-            elif shortname=='t':
-                data = ds.temperature
-        elif source=='IMERG':
-            ds   = get_imerg()
-            logger.info(f'Successfully fetched {source.upper()}')
-            data = ds.precipitationCal.where((ds.precipitationCal!=-9999.9)&(ds.precipitationCal>=0), np.nan)*24  # mm/hr to mm/day
-        processed = preprocess(data,shortname=shortname,longname=longname,units=units)
-        logger.info(f'Successfully preprocessed {shortname}')
-        savesuccess = save(processed,longname)
-        if savesuccess:
-            logger.info(f'Successfully saved {shortname}')
-        else:
-            logger.warning(f'Failed to save {shortname}')
-        return savesuccess
-    except Exception as e:
-        logger.error(f'Error processing {longname}: {str(e)}')
+        logger.error(f'Failed to save {filename}: {str(e)}')
         return False
 
 if __name__ == '__main__':
-    logger.info('Starting data download and processing...')
-    varinfolist = [
-        ('IMERG','pr','IMERG V06 precipitation rate','mm/day'),
-        ('ERA5','ps','ERA5 surface pressure','hPa'),
-        ('ERA5','q','ERA5 specific humidity','kg/kg'),
-        ('ERA5','t','ERA5 air temperature','K')]
-    with ProcessPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(process_and_save,varinfo) for varinfo in varinfolist]
-        results = []
-        for future in as_completed(futures):
-            results.append(future.result())
-    logger.info(f'Successfully saved {sum(results)} out of {len(vardict)} variables')
-    logger.info('Script execution completed!')
+    try:
+        logger.info('Fetching ERA5 and IMERG data...')
+        era5  = get_era5()
+        imerg = get_imerg()
+        logger.info('Extracting variables...')
+        prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24 # mm/hr to mm/day
+        psdata = era5.surface_pressure/100 # Pa to hPa
+        tdata  = era5.temperature
+        qdata  = era5.specific_humidity
+        logger.info('Preprocessing variables...')
+        pr = preprocess(prdata,'pr','IMERG V06 precipitation rate','mm/day')
+        ps = preprocess(psdata,'ps','ERA5 surface pressure','hPa')
+        t  = preprocess(tdata,'t','ERA5 air temperature','K')
+        q  = preprocess(qdata,'q','ERA5 specific humidity','kg/kg')
+        logger.info('Saving variables...')
+        for variable in [pr,ps,t,q]:
+            save(variable):
+            del variable
+        logger.info('Script execution completed successfully!')
+    except Exception as e:
+        logger.error(f'An unexpected error occurred: {str(e)}')

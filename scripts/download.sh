@@ -5,7 +5,7 @@
 #SBATCH --mail-user=savannah.ferretti@uci.edu
 #SBATCH --mail-type=ALL
 #SBATCH --qos=regular
-#SBATCH --time=06:00:00
+#SBATCH --time=10:00:00
 #SBATCH --nodes=1
 #SBATCH --constraint=cpu
 #SBATCH --licenses=cfs
