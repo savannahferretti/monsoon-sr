@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --account=m4334
 #SBATCH --job-name=download
-#SBATCH --output=%x-%j.log
+#SBATCH --output=%x.log
 #SBATCH --mail-user=savannah.ferretti@uci.edu
 #SBATCH --mail-type=ALL
 #SBATCH --qos=regular
@@ -23,7 +23,7 @@ SCRIPTDIR='/global/cfs/cdirs/m4334/sferrett/monsoon-sr/scripts'
 cd $SCRIPTDIR
 
 # Run the Python download script
-srun --cpu-bind=cores python download.py
+srun --cpu-bind=cores python download.py 2>&1
 
 # Deactivate the conda environment
 conda deactivate

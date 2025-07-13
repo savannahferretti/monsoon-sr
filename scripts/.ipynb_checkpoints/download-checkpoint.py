@@ -47,9 +47,9 @@ def get_imerg():
     '''
     try:
         store   = 'https://planetarycomputer.microsoft.com/api/stac/v1'
-        catalog = pystac.Client.open(store,modifier=planetary_computer.sign_inplace)
+        catalog = pystac.Client.open(store, modifier=planetary_computer.sign_inplace)
         assets  = catalog.get_collection('gpm-imerg-hhr').assets['zarr-abfs']
-        ds = xr.open_zarr(store,decode_times=True)  
+        ds      = xr.open_zarr(fsspec.get_mapper(assets.href,**assets.extra_fields['xarray:storage_options']),consolidated=True)
         logger.info(f'Successfully fetched IMERG')
         return ds
     except Exception as e:
@@ -169,7 +169,7 @@ if __name__ == '__main__':
         q  = preprocess(qdata,'q','ERA5 specific humidity','kg/kg')
         logger.info('Saving variables...')
         for variable in [pr,ps,t,q]:
-            save(variable):
+            save(variable)
             del variable
         logger.info('Script execution completed successfully!')
     except Exception as e:
