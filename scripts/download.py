@@ -1,6 +1,5 @@
 import os
 import re
-import sys
 import gcsfs
 import fsspec
 import logging
@@ -11,13 +10,17 @@ import planetary_computer
 from datetime import datetime
 import pystac_client as pystac
 
-warnings.filterwarnings('ignore')
+logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.WARNING)
+logging.getLogger('azure').setLevel(logging.WARNING)
+logging.getLogger('fsspec').setLevel(logging.WARNING)
+
 logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
+warnings.filterwarnings('ignore')
 
 AUTHOR    = 'Savannah L. Ferretti'
 EMAIL     = 'savannah.ferretti@uci.edu'
-SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-pod/data/raw'
+SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
 YEARS     = [2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020]
 MONTHS    = [6,7,8]
 LATRANGE  = (5.,25.) 
@@ -142,8 +145,11 @@ def save(ds,savedir=SAVEDIR):
     Returns:
     - bool: True if the save operation was successful, False otherwise
     '''  
-    filename = re.sub(r'\s+','_',ds.attrs['long_name'])+'.nc'
+    varname  = list(ds.data_vars)[0]
+    longname = ds[varname].attrs['long_name']
+    filename = re.sub(r'\s+','_',longname)+'.nc'
     filepath = os.path.join(savedir,filename)
+    logger.info(f'Attempting to save {filepath}') 
     try:
         ds.to_netcdf(filepath)
         logger.info(f'Successfully saved {filename}')
@@ -156,21 +162,22 @@ if __name__ == '__main__':
     try:
         logger.info('Fetching ERA5 and IMERG data...')
         era5  = get_era5()
-        imerg = get_imerg()
+        # imerg = get_imerg()
         logger.info('Extracting variables...')
-        prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24 # mm/hr to mm/day
-        psdata = era5.surface_pressure/100 # Pa to hPa
-        tdata  = era5.temperature
-        qdata  = era5.specific_humidity
+        # pr = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24 # mm/hr to mm/day
+        # ps = era5.surface_pressure/100 # Pa to hPa
+        # t  = era5.temperature
+        q  = era5.specific_humidity
         logger.info('Preprocessing variables...')
-        pr = preprocess(prdata,'pr','IMERG V06 precipitation rate','mm/day')
-        ps = preprocess(psdata,'ps','ERA5 surface pressure','hPa')
-        t  = preprocess(tdata,'t','ERA5 air temperature','K')
-        q  = preprocess(qdata,'q','ERA5 specific humidity','kg/kg')
+        # prdata = preprocess(pr,'pr','IMERG V06 precipitation rate','mm/day')
+        # psdata = preprocess(ps,'ps','ERA5 surface pressure','hPa')
+        # tdata  = preprocess(t,'t','ERA5 air temperature','K')
+        qdata  = preprocess(q,'q','ERA5 specific humidity','kg/kg')
         logger.info('Saving variables...')
-        for variable in [pr,ps,t,q]:
-            save(variable)
-            del variable
+        # save(prdata)
+        # save(psdata)
+        # save(tdata)
+        save(qdata)
         logger.info('Script execution completed successfully!')
     except Exception as e:
         logger.error(f'An unexpected error occurred: {str(e)}')

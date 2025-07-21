@@ -63,3 +63,10 @@ target/             # PyBuilder
 .mypy_cache/        # MyPy cache
 *.so                # C extensions
 *.log               # Django stuff
+*.nc
+*.hdf5
+*.h5
+*.nc
+*.log
+.ipynb_checkpoints/
+*.pth
