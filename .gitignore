@@ -89,4 +89,3 @@ site/                       # MkDocs site directory
 dmypy.json                  # MyPy daemon configuration
 *.mo                        # Compiled translation files
 *.pot                       # Translation template files
-.ipynb_checkpoints/
