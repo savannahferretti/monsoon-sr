@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=100GB
-#SBATCH --time=10:00:00
+#SBATCH --time=16:00:00
 #SBATCH --constraint=cpu
 #SBATCH --licenses=cfs
 #SBATCH --qos=regular
 #SBATCH --account=m4334
-#SBATCH --job-name=download
-#SBATCH --output=download.log
+#SBATCH --job-name=calculate
+#SBATCH --output=calculate.log
 #SBATCH --mail-user=savannah.ferretti@uci.edu
 #SBATCH --mail-type=ALL
 
@@ -25,7 +25,7 @@ SCRIPTDIR='/global/cfs/cdirs/m4334/sferrett/monsoon-sr/scripts'
 cd $SCRIPTDIR
 
 # Execute the Python script
-srun --cpu-bind=cores python download.py 2>&1
+srun --cpu-bind=cores python calculate.py 2>&1
 
 # Deactivate the Conda environment
 conda deactivate
