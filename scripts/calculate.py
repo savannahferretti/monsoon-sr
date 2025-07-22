@@ -334,7 +334,7 @@ if __name__ == '__main__':
         logger.info('Formatting and saving variables...')
         dslist = [
             dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
-            dataset(filteredt,'t','Filtered air temperature','K')
+            dataset(filteredt,'t','Filtered air temperature','K'),
             dataset(filteredq,'q','Filtered specific humidity','kg/kg'),
             dataset(filteredthetae,'thetae','Filtered equivalent potential temperature','K'),
             dataset(filteredthetaes,'thetaes','Filtered saturated equivalent potential temperature','K'),
