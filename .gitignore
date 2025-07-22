@@ -92,6 +92,3 @@ site/                       # MkDocs site directory
 dmypy.json                  # MyPy daemon configuration
 *.mo                        # Compiled translation files
 *.pot                       # Translation template files
-data/raw/*                  # Contents of the raw data subdirectory
-data/interim/*              # Contents of the interim data subdirectory
-data/processed/*            # Contents of the processed data subdirectory
