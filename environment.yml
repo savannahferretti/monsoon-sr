@@ -20,4 +20,10 @@ dependencies:
   - pytorch
   - scikit-learn
   - adlfs
+  - gcsfs
+  - fsspec
+  - planetary-computer
+  - pystac-client
+  - numba
+  - xesmf
 prefix: /global/homes/s/sferrett/.conda/envs/monsoon-sr
