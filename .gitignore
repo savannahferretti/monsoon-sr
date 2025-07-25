@@ -1,6 +1,10 @@
 **/.ipynb_checkpoints/     # Jupyter checkpoint files
-data/raw/*                 # Ignore all contents of data/raw/
+data/raw/*                 # Ignore all contents of data/raw/ 
+!data/raw/.gitkeep         # But keep .gitkeep
 data/interim/*             # Ignore all contents of data/interim/
+!data/interim/.gitkeep     # But keep .gitkeep  
 data/processed/*           # Ignore all contents of data/processed/
-!data/*/.gitkeep          # But keep .gitkeep files
-*.nc                      # Ignore large NetCDF data files
+!data/processed/.gitkeep   # But keep .gitkeep
+data/external/*            # Ignore all contents of data/external/
+!data/external/.gitkeep    # But keep .gitkeep
+*.nc                       # Ignore large NetCDF data files
