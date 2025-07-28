@@ -12,8 +12,8 @@ warnings.filterwarnings('ignore')
 
 AUTHOR  = 'Savannah L. Ferretti'      
 EMAIL   = 'savannah.ferretti@uci.edu' 
-FILEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-pod/data/raw'
-SAVEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-pod/data/processed'
+FILEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
+SAVEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
 
 def load(filename,filedir=FILEDIR):
     '''

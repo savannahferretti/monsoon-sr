@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "/global/cfs/cdirs/m4334/sferrett/monsoon-sr/scripts/calculate.py", line 2, in <module>
-    import xesmf
-ModuleNotFoundError: No module named 'xesmf'
-srun: error: nid005035: task 0: Exited with exit code 1
-srun: Terminating StepId=41039183.0
