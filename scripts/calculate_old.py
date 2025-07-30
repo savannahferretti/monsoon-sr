@@ -10,15 +10,14 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-AUTHOR    = 'Savannah L. Ferretti'      
-EMAIL     = 'savannah.ferretti@uci.edu' 
-FILEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
-SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
-CHUNKSIZE = 21
+AUTHOR  = 'Savannah L. Ferretti'      
+EMAIL   = 'savannah.ferretti@uci.edu' 
+FILEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
+SAVEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
 
-def get_data(filename,filedir=FILEDIR):
+def load(filename,filedir=FILEDIR):
     '''
-    Purpose: Open a NetCDF file as an xarray.DataArray and check level ordering (if applicable).
+    Purpose: Load a NetCDF file as an xarray.DataArray and check level ordering (if applicable).
     Args:
     - filename (str): name of the file to load
     - filedir (str): directory containing the file (defaults to FILEDIR)
@@ -31,7 +30,7 @@ def get_data(filename,filedir=FILEDIR):
         if not da.lev.diff('lev').all()>0:
             da = da.reindex(lev=sorted(da.lev))
             logger.info(f'Levels reordered from {da.lev.values[0]} to {da.lev.values[-1]} hPa')
-    return da
+    return da.load()
     
 def get_p_array(da):
     '''
@@ -94,21 +93,23 @@ def calc_qs(p,t):
 
 def calc_thetae(p,t,q=None,ps=None):
     '''
-    Purpose: Calculate equivalent potential temperature (θe) following Eqs. 43 and 55 from Bolton D. 1980. Mon. Wea. Rev. Options to calculate θe at the surface, or the saturated θe are given.        
+    Purpose: Calculate equivalent potential temperature (θₑ) following Eqs. 43 and 55 from: Bolton D. 1980. Mon. Wea. Rev.
+             Options to calculate θₑ at the surface, or the saturated θₑ are given.        
     Args:
     - p (xarray.DataArray): pressure DataArray (hPa)
     - t (xarray.DataArray): temperature DataArray (K)
-    - q (xarray.DataArray, optional): specific humidity DataArray (kg/kg); if None, saturated θe will be calculated
-    - ps (xarray.DataArray, optional): surface pressure DataArray (hPa); if given, θe at the surface will be calculated
+    - q (xarray.DataArray, optional): specific humidity DataArray (kg/kg); if None, saturated θₑ will be calculated
+    - ps (xarray.DataArray, optional): surface pressure DataArray (hPa); if given, θₑ at the surface will be calculated
     Returns:
-    - xarray.DataArray: (regular, surface, or saturated) θe DataArray (K)
+    - xarray.DataArray: (regular, surface, or saturated) equivalent potential temperature DataArray (K)
     '''
     if q is None:
         qs = calc_qs(p,t)
         q  = qs
     if ps is not None:
         tsurf = t.interp(lev=ps)
-        qsurf = q.interp(lev=ps)
+        if q is not None:
+            qsurf = q.interp(lev=ps)
         t = tsurf
         q = qsurf
         p = ps
@@ -207,7 +208,7 @@ def calc_weights(ps,pbltop,lfttop):
     - pbltop (xr.DataArray): DataArray of pressures at the top of the PBL (hPa)
     - lfttop (xr.DataArray): DataArray of pressures at the top of the LFT (hPa)
     Returns:
-    - tuple (xr.DataArray, xr.DataArray): containing DataArrays of PBL and LFT weights
+    - tuple (wb, wl): DataArrays of PBL weights and LFT weights
     '''
     pblthickness = ps-pbltop
     lftthickness = pbltop-lfttop
@@ -225,7 +226,7 @@ def calc_bl_terms(thetaeb,thetael,thetaels,wb,wl):
     - wb (xr.DataArray): DataArray of weights for the PBL
     - wl (xr.DataArray): DataArray of weights for the LFT
     Returns:
-    - tuple (xr.DataArray, xr.DataArray): containing DataArrays of CAPEL, SUBSATL, and BL
+    - tuple (cape, subsat, bl): DataArrays of CAPEL, SUBSATL, and BL
     '''
     g       = 9.81
     kappal  = 3.
@@ -261,7 +262,8 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
 
 def save(ds,savedir=SAVEDIR):
     '''
-    Purpose: Save an xarray.Dataset to a NetCDF file in the specified directory. Verify the file was saved successfully by attempting to reopen it.
+    Purpose: Save an xarray.Dataset to a NetCDF file in the specified directory. 
+             Verify the file was saved successfully by attempting to reopen it.
     Args:
     - ds (xarray.Dataset): Dataset to save
     - savedir (str): directory where the file should be saved (defaults to SAVEDIR)
@@ -274,94 +276,72 @@ def save(ds,savedir=SAVEDIR):
     logger.info(f'Attempting to save {filename}...')   
     try:
         ds.to_netcdf(filepath)
-        logger.info(f'File writing successful: {filename}')
-        with xr.open_dataset(filepath) as test:
-            pass
-        logger.info(f'File verification successful: {filename}')
-        return True
+        logger.info(f'File written successfully: {filename}')
     except Exception as e:
-        logger.error(f'Failed to save or verify {filename}: {e}')
+        logger.error(f'Failed to write {filename}: {e}')
         return False
-
-if __name__=='__main__':
     try:
-        logger.info('Importing raw variables...')        
-        pr = get_data('IMERG_V06_precipitation_rate.nc')
-        ps = get_data('ERA5_surface_pressure.nc')
-        t  = get_data('ERA5_air_temperature.nc')
-        q  = get_data('ERA5_specific_humidity.nc')
-        logger.info('Beginning chunking...')
-        timechunks   = np.array_split(pr.time,CHUNKSIZE)
-        chunkresults = {
-            'pr':[],
-            't':[],
-            'q':[],
-            'capeprofile':[],
-            'subsatprofile':[],
-            'cape':[],
-            'subsat':[],
-            'bl':[]}
-        for i,timechunk in enumerate(timechunks):
-            logger.info(f'Processing time chunk {i+1}/{len(timechunks)}...')
-            logger.info('   Loading in raw variables chunks...')
-            prchunk = pr.sel(time=timechunk).load()
-            tchunk  = t.sel(time=timechunk).load()
-            qchunk  = q.sel(time=timechunk).load()
-            pschunk = ps.sel(time=timechunk).load()
-            pchunk  = get_p_array(qchunk)
-            logger.info('   Resampling/regridding precipitation')
-            resampledprchunk = regrid_and_resample(prchunk,pschunk)
-            del prchunk
-            logger.info('   Calculate equivalent potential temperature terms...')
-            thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
-            thetaeschunk    = calc_thetae(pchunk,tchunk)
-            thetaesurfchunk = calc_thetae(pchunk,tchunk,qchunk,pschunk)
-            del pchunk
-            logger.info('   Filter out data where the pressure level is below the surface...')    
-            filteredtchunk = filter_above_surface(tchunk,pschunk)
-            filteredqchunk = filter_above_surface(qchunk,pschunk)
-            filteredthetaechunk  = filter_above_surface(thetaechunk,pschunk)
-            filteredthetaeschunk = filter_above_surface(thetaeschunk,pschunk)
-            del tchunk,qchunk,thetaechunk,thetaeschunk
-            logger.info('  Calculate CAPE-like and SUBSAT-like profiles...')    
-            capeprofilechunk   = thetaesurfchunk-filteredthetaeschunk
-            subsatprofilechunk = filteredthetaeschunk-filteredthetaechunk
-            del thetaesurfchunk
-            logger.info('   Calculating BL terms...')
-            pbltopchunk = pschunk-100.
-            lfttopchunk = xr.full_like(pschunk,500.) 
-            thetaebchunk    = calc_layer_average(filteredthetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
-            thetaelchunk    = calc_layer_average(filteredthetaechunk,pbltopchunk,lfttopchunk)
-            thetaelschunk   = calc_layer_average(filteredthetaeschunk,pbltopchunk,lfttopchunk)
-            wbchunk,wlchunk = calc_weights(pschunk,pbltopchunk,lfttopchunk)
-            capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelschunk,wbchunk,wlchunk)
-            del pbltopchunk,lfttopchunk,wbchunk,wlchunk
-            logger.info('   Appending chunk results...')
-            chunkresults['pr'].append(resampledprchunk)
-            chunkresults['t'].append(filteredtchunk)
-            chunkresults['q'].append(filteredqchunk)
-            chunkresults['capeprofile'].append(capeprofilechunk)
-            chunkresults['subsatprofile'].append(subsatprofilechunk)
-            chunkresults['cape'].append(capechunk)
-            chunkresults['subsat'].append(subsatchunk)
-            chunkresults['bl'].append(blchunk)
-            del (resampledprchunk,pschunk,filteredtchunk,filteredqchunk,filteredthetaechunk,filteredthetaeschunk,capeprofilechunk,subsatprofilechunk,
-                 thetaebchunk,thetaelchunk,thetaelschunk,capechunk,subsatchunk,blchunk)
-        del pr,ps,t,q
-        logger.info('Concatenating results and saving...')
-        finalresults = {}
-        for key,chunks in chunkresults.items():
-            finalresults[key] = xr.concat(chunks,dim='time')
-            del chunks
+        with xr.open_dataset(filepath) as testds:
+            logger.info(f'File verification successful: {filename}')
+            return True
+    except Exception as e:
+        logger.warning(f'File saved but verification failed for {filename}: {e}')
+        if os.path.exists(filepath):
+            filesize = os.path.getsize(filepath)/(1024**3)
+            logger.info(f'File exists with size {filesize:.2f} GB; considering save successful')
+            return True
+        else:
+            logger.error(f'File does not exist after save: {filename}')
+            return False
+
+if __name__ == '__main__':
+    try:
+        logger.info('Loading raw variables...')        
+        pr = load('IMERG_V06_precipitation_rate.nc')
+        ps = load('ERA5_surface_pressure.nc')
+        t  = load('ERA5_air_temperature.nc')
+        q  = load('ERA5_specific_humidity.nc')
+        p  = get_p_array(q)
+        logger.info('Resampling/regridding precipitation...')
+        resampledpr = regrid_and_resample(pr,ps)
+        del pr
+        logger.info('Calculate equivalent potential temperature terms...')
+        thetae     = calc_thetae(p,t,q)
+        thetaes    = calc_thetae(p,t)
+        thetaesurf = calc_thetae(p,t,q,ps)
+        del p
+        logger.info('Filter out data where the pressure level is below the surface...')    
+        filteredthetae  = filter_above_surface(thetae,ps)
+        filteredthetaes = filter_above_surface(thetaes,ps)
+        filteredt       = filter_above_surface(t,ps)
+        filteredq       = filter_above_surface(q,ps)
+        del t,q,thetae,thetaes
+        logger.info('Calculating layer averages...')
+        pbltop   = ps-100.
+        lfttop   = xr.full_like(ps,500.) 
+        thetaeb  = calc_layer_average(filteredthetae,ps,pbltop)*np.sqrt(-1+2*(ps>lfttop))
+        thetael  = calc_layer_average(filteredthetae,pbltop,lfttop)
+        thetaels = calc_layer_average(filteredthetaes,pbltop,lfttop)
+        wb,wl    = calc_weights(ps,pbltop,lfttop)
+        del ps,pbltop,lfttop
+        logger.info('Calculating BL terms...')
+        cape,subsat,bl  = calc_bl_terms(thetaeb,thetael,thetaels,wb,wl)
+        logger.info('Formatting and saving variables...')
         dslist = [
-            dataset(finalresults['pr'],'pr','Resampled/regridded precipitation rate','mm/day'),
-            dataset(finalresults['t'],'t','Filtered air temperature','K'),
-            dataset(finalresults['q'],'q','Filtered specific humidity','kg/kg'),
-            dataset(finalresults['capeprofile'],'capeprofile','Equivalent potential temperature at the surface minus saturated equivalent potential temperature','K'),
-            dataset(finalresults['subsatprofile'],'subsatprofile','Saturated equivalent potential temperature minus equivalent potential temperature','K'),   
-            dataset(finalresults['cape'],'cape','Undilute buoyancy in the lower troposphere','K'),
-            dataset(finalresults['subsat'],'subsat','Lower free-tropospheric subsaturation','K'),
-            dataset(finalresults['bl'],'bl','Average buoyancy in the lower troposphere','m/s²')]
+            dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
+            dataset(filteredt,'t','Filtered air temperature','K'),
+            dataset(filteredq,'q','Filtered specific humidity','kg/kg'),
+            dataset(filteredthetae,'thetae','Filtered equivalent potential temperature','K'),
+            dataset(filteredthetaes,'thetaes','Filtered saturated equivalent potential temperature','K'),
+            dataset(thetaesurf,'thetaesurf','Equivalent potential temperature at the surface','K'),
+            dataset(thetaeb,'thetaeb','Filtered equivalent potential temperature averaged over the boundary layer','K'),
+            dataset(thetael,'thetael','Filtered equivalent potential temperature averaged over the lower free troposphere','K'),
+            dataset(thetaels,'thetaels','Filtered saturated equivalent potential temperature over the loweer free troposphere','K'),
+            dataset(wb,'wb','Fractional contribution of boundary layer air','0-1'),
+            dataset(wl,'wl','Fractional contribution of lower free-tropospheric air','0-1'),            
+            dataset(cape,'cape','Undilute buoyancy in the lower troposphere','K'),
+            dataset(subsat,'subsat','Lower free-tropospheric subsaturation','K'),
+            dataset(bl,'bl','Average buoyancy in the lower troposphere','m/s²')]
         for ds in dslist:
             save(ds)
             del ds

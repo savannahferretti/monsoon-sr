@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=100GB
-#SBATCH --time=16:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=400GB
+#SBATCH --time=01:00:00
 #SBATCH --constraint=cpu
 #SBATCH --licenses=cfs
 #SBATCH --qos=regular

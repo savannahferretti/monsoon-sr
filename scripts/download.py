@@ -153,8 +153,7 @@ def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRA
 
 def save(ds,savedir=SAVEDIR):
     '''
-    Purpose: Save an xarray.Dataset to a NetCDF file in the specified directory. 
-             Verify the file was saved successfully by attempting to reopen it.
+    Purpose: Save an xarray.Dataset to a NetCDF file in the specified directory. Verify the file was saved successfully by attempting to reopen it.
     Args:
     - ds (xarray.Dataset): Dataset to save
     - savedir (str): directory where the file should be saved (defaults to SAVEDIR)
@@ -168,23 +167,14 @@ def save(ds,savedir=SAVEDIR):
     logger.info(f'Attempting to save {filename}...')   
     try:
         ds.to_netcdf(filepath)
-        logger.info(f'File written successfully: {filename}')
+        logger.info(f'File writing successful: {filename}')
+        with xr.open_dataset(filepath) as test:
+            pass
+        logger.info(f'File verification successful: {filename}')
+        return True
     except Exception as e:
-        logger.error(f'Failed to write {filename}: {e}')
+        logger.error(f'Failed to save or verify {filename}: {e}')
         return False
-    try:
-        with xr.open_dataset(filepath) as testds:
-            logger.info(f'File verification successful: {filename}')
-            return True
-    except Exception as e:
-        logger.warning(f'File saved but verification failed for {filename}: {e}')
-        if os.path.exists(filepath):
-            filesize = os.path.getsize(filepath)/(1024**3)
-            logger.info(f'File exists with size {filesize:.2f} GB; considering save successful')
-            return True
-        else:
-            logger.error(f'File does not exist after save: {filename}')
-            return False
 
 if __name__=='__main__':
     try:
