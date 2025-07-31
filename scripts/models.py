@@ -4,6 +4,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset,DataLoader
 
+MODELDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/models'
+
 class BASELINE:
     
     def __init__(self,binwidth,binmin,binmax,samplethresh):
@@ -199,12 +201,12 @@ class MLP:
             if validloss<bestvalidloss:
                 bestvalidloss   = validloss
                 patiencecounter = 0
-                torch.save(self.model.state_dict(),'temp_best_model.pth')
+                torch.save(self.model.state_dict(),f'{MODELDIR}/mlp/temp_best_model.pth')
             else:
                 patiencecounter += 1
                 if patiencecounter>=self.patience:
                     print(f'Early stopping triggered after {epoch+1} epochs')
-                    self.model.load_state_dict(torch.load('temp_best_model.pth'))
+                    self.model.load_state_dict(torch.load(f'{MODELDIR}/mlp/temp_best_model.pth'))
                     break
         return (trainlosses,validlosses)
 

@@ -2,7 +2,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=400GB
-#SBATCH --time=01:00:00
+#SBATCH --time=06:00:00
 #SBATCH --constraint=cpu
 #SBATCH --licenses=cfs
 #SBATCH --qos=regular

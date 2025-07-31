@@ -1,6 +1,7 @@
 import os
 import pickle
 import logging
+import warnings
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -47,51 +48,49 @@ def prepare(X,y,testsize=TESTSIZE):
     Xtrain,Xtest,ytrain,ytest = train_test_split(df[Xcols],df[ycol],test_size=testsize,shuffle=False)
     return Xtrain,Xtest,ytrain,ytest
 
-def save(datadict,filename,savedir=SAVEDIR):
+def save(data,filename,savedir=SAVEDIR):
     '''
-    Purpose: Save a data dictionary to a pickle file in the specified directory. Verify the file was saved successfully by attempting to reopen it.
+    Purpose: Save a Series or DataFrame to a single parquet file in the specified directory.
     Args:
-    - datadict (dict): data dictionary to save
-    - filename (str): name of the pickle file
+    - data (pd.Series or pd.DataFrame): data to save
+    - filename (str): name of the parquet file
     - savedir (str): directory where the file should be saved (defaults to SAVEDIR)
     Returns:
     - bool: True if the save operation was successful, False otherwise
-    '''  
+    '''    
     filepath = os.path.join(savedir,filename)
-    logger.info(f'Attempting to save {filename}...')   
     try:
-        with open(filepath,'wb') as file:
-            pickle.dump(datadict,file)
-            logger.info(f'File written successfully: {filename}')
-            with open(filepath,'rb') as file:
-                test = pickle.load(file)
-            logger.info(f'File verification successful: {filename}')
-            return True
+        if isinstance(data,pd.DataFrame):
+            data.to_parquet(filepath)
+        elif isinstance(data,pd.Series):
+            data.to_frame().to_parquet(filepath)
+        else:
+            pd.DataFrame(data).to_parquet(filepath)
+        logger.info(f'Successfully saved {filename}')
+        return True
     except Exception as e:
-        logger.error(f'Failed to save or verify {filename}: {e}')
+        logger.error(f'Failed to save {filename}: {e}')
         return False
-        
+
 if __name__=='__main__':
     try:
         logger.info('Loading data...')
-        bl = load('bl')
-        pr = load('pr')
+        bl     = load('bl')
+        cape   = load('cape')
+        subsat = load('subsat')
+        pr     = load('pr')
         logger.info('Preparing train/test splits...')
-        Xtrain,Xtest,ytrain,ytest = prepare([bl],pr)
+        Xtrain,Xtest,ytrain,ytest = prepare([bl,cape,subsat],pr)
         ytrainlog = np.log(ytrain+1)
         ytestlog  = np.log(ytest+1)
         logger.info('Saving training data...')
-        traindata = {
-            'Xtrain':Xtrain,
-            'ytrain':ytrain,
-            'ytrainlog':ytrainlog}
-        save(traindata,'traindata.pkl')
+        save(Xtrain,'Xtrain.parquet')
+        save(ytrain,'ytrain.parquet') 
+        save(ytrainlog,'ytrainlog.parquet')
         logger.info('Saving testing data...')
-        testdata = {
-            'Xtest':Xtest,
-            'ytest':ytest,
-            'ytestlog':ytestlog}
-        save(testdata,'testdata.pkl')
+        save(Xtest,'Xtest.parquet')
+        save(ytest,'ytest.parquet')
+        save(ytestlog,'ytestlog.parquet')
         logger.info('All data saved successfully!')
     except Exception as e:
         logger.error(f'An unexpected error occurred: {str(e)}')

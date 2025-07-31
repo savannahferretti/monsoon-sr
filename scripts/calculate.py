@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 AUTHOR    = 'Savannah L. Ferretti'      
 EMAIL     = 'savannah.ferretti@uci.edu' 
 FILEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
-SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
+SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
 CHUNKSIZE = 21
 
 def get_data(filename,filedir=FILEDIR):
@@ -104,20 +104,20 @@ def calc_thetae(p,t,q=None,ps=None):
     - xarray.DataArray: (regular, surface, or saturated) θe DataArray (K)
     '''
     if q is None:
-        qs = calc_qs(p,t)
-        q  = qs
+        q = calc_qs(p,t)
     if ps is not None:
-        tsurf = t.interp(lev=ps)
-        qsurf = q.interp(lev=ps)
-        t = tsurf
-        q = qsurf
+        t = t.interp(lev=ps)
+        q = q.interp(lev=ps)
         p = ps
+        pvalues = ps
+    else:
+        pvalues = p.lev
     p0 = 1000.  
     rv = 461.5  
     rd = 287.04
     epsilon = rd/rv
     r  = q/(1.-q) 
-    e  = (p.lev*r)/(epsilon+r)
+    e  = (pvalues*r)/(epsilon+r)
     tl = 2840./(3.5*np.log(t)-np.log(e)-4.805)+55.
     thetae = t*(p0/p)**(0.2854*(1.-0.28*r))*np.exp((3.376/tl-0.00254)*1000.*r*(1.+0.81*r))
     return thetae
@@ -285,15 +285,17 @@ def save(ds,savedir=SAVEDIR):
 
 if __name__=='__main__':
     try:
-        logger.info('Importing raw variables...')        
+        logger.info('Importing all raw variables...')        
         pr = get_data('IMERG_V06_precipitation_rate.nc')
         ps = get_data('ERA5_surface_pressure.nc')
         t  = get_data('ERA5_air_temperature.nc')
         q  = get_data('ERA5_specific_humidity.nc')
+        logger.info('Resampling/regridding precipitation...')
+        resampledpr = regrid_and_resample(pr.load(),ps.load())
+        del pr
         logger.info('Beginning chunking...')
-        timechunks   = np.array_split(pr.time,CHUNKSIZE)
+        timechunks   = np.array_split(np.arange(len(ps.time)),CHUNKSIZE)
         chunkresults = {
-            'pr':[],
             't':[],
             'q':[],
             'capeprofile':[],
@@ -303,15 +305,11 @@ if __name__=='__main__':
             'bl':[]}
         for i,timechunk in enumerate(timechunks):
             logger.info(f'Processing time chunk {i+1}/{len(timechunks)}...')
-            logger.info('   Loading in raw variables chunks...')
-            prchunk = pr.sel(time=timechunk).load()
-            tchunk  = t.sel(time=timechunk).load()
-            qchunk  = q.sel(time=timechunk).load()
-            pschunk = ps.sel(time=timechunk).load()
+            logger.info('   Loading in raw ERA5 variables chunks...')
+            tchunk  = t.isel(time=timechunk).load()
+            qchunk  = q.isel(time=timechunk).load()
+            pschunk = ps.isel(time=timechunk).load()
             pchunk  = get_p_array(qchunk)
-            logger.info('   Resampling/regridding precipitation')
-            resampledprchunk = regrid_and_resample(prchunk,pschunk)
-            del prchunk
             logger.info('   Calculate equivalent potential temperature terms...')
             thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
             thetaeschunk    = calc_thetae(pchunk,tchunk)
@@ -337,7 +335,6 @@ if __name__=='__main__':
             capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelschunk,wbchunk,wlchunk)
             del pbltopchunk,lfttopchunk,wbchunk,wlchunk
             logger.info('   Appending chunk results...')
-            chunkresults['pr'].append(resampledprchunk)
             chunkresults['t'].append(filteredtchunk)
             chunkresults['q'].append(filteredqchunk)
             chunkresults['capeprofile'].append(capeprofilechunk)
@@ -345,16 +342,16 @@ if __name__=='__main__':
             chunkresults['cape'].append(capechunk)
             chunkresults['subsat'].append(subsatchunk)
             chunkresults['bl'].append(blchunk)
-            del (resampledprchunk,pschunk,filteredtchunk,filteredqchunk,filteredthetaechunk,filteredthetaeschunk,capeprofilechunk,subsatprofilechunk,
+            del (pschunk,filteredtchunk,filteredqchunk,filteredthetaechunk,filteredthetaeschunk,capeprofilechunk,subsatprofilechunk,
                  thetaebchunk,thetaelchunk,thetaelschunk,capechunk,subsatchunk,blchunk)
-        del pr,ps,t,q
+        del ps,t,q
         logger.info('Concatenating results and saving...')
         finalresults = {}
         for key,chunks in chunkresults.items():
             finalresults[key] = xr.concat(chunks,dim='time')
             del chunks
         dslist = [
-            dataset(finalresults['pr'],'pr','Resampled/regridded precipitation rate','mm/day'),
+            dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
             dataset(finalresults['t'],'t','Filtered air temperature','K'),
             dataset(finalresults['q'],'q','Filtered specific humidity','kg/kg'),
             dataset(finalresults['capeprofile'],'capeprofile','Equivalent potential temperature at the surface minus saturated equivalent potential temperature','K'),
