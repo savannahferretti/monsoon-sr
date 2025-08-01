@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import re
 import gcsfs
@@ -196,6 +198,6 @@ if __name__=='__main__':
         for ds in dslist:
             save(ds)
             del ds
-        logger.info(f'Script execution completed successfully!')
+        logger.info('Script execution completed successfully!')
     except Exception as e:
         logger.error(f'An unexpected error occurred: {str(e)}')

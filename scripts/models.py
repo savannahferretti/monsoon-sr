@@ -60,12 +60,12 @@ class BASELINE:
         xvalues = x.values
         binidxs = np.clip(np.digitize(xvalues,self.binedges)-1,0,self.nbins-1)
         ypred = self.model[binidxs]
-        ypred = np.maximum(ypred,0)
+        ypred = np.maximum(ypred,0) # Enforce non-negative constraint
         return ypred
 
 class MLPMODEL(torch.nn.Module):
     
-    def __init__(self,inputlayersize,hiddenlayersize,nhiddenlayers,activation=None):
+    def __init__(self,inputlayersize,hiddenlayersize,nhiddenlayers,activation=None,logtransform=False):
         '''
         Purpose: Initialize a multi-layer perceptron model with specified architecture.
         Args:
@@ -73,12 +73,14 @@ class MLPMODEL(torch.nn.Module):
         - hiddenlayersize (int): number of neurons in each hidden layer
         - nhiddenlayers (int): number of hidden layers
         - activation (torch.nn.Module): activation function to use (defaults to Identity if None)
+        - logtransform (bool): whether to apply log transformation to targets (defaults to False)
         '''
         super(MLPMODEL,self).__init__()
         self.inputlayersize  = inputlayersize
         self.hiddenlayersize = hiddenlayersize
         self.nhiddenlayers   = nhiddenlayers
         self.activation      = activation if activation is not None else torch.nn.Identity()
+        self.logtransform    = logtransform
         layers = []
         layers.append(torch.nn.Linear(inputlayersize,hiddenlayersize))
         layers.append(self.activation)
@@ -86,7 +88,9 @@ class MLPMODEL(torch.nn.Module):
             layers.append(torch.nn.Linear(hiddenlayersize,hiddenlayersize))
             layers.append(self.activation)
         layers.append(torch.nn.Linear(hiddenlayersize,1))
-        self.layers          = torch.nn.Sequential(*layers)
+        if not self.logtransform:
+            layers.append(self.activation)
+        self.layers  = torch.nn.Sequential(*layers)
 
     def forward(self,Xtensor):
         '''
@@ -216,14 +220,17 @@ class MLP:
         Args:
         - X (pd.Series or pd.DataFrame): input feature(s) for which to make predictions
         Returns:
-        - np.ndarray: predicted target values
+        - np.ndarray: predicted target values (in original units)
         '''
         Xtensor = self._tensor(X).to(self.device)
         self.model.eval()
         with torch.no_grad():
             ypred = self.model(Xtensor)
+            if self.logtransform:
+                ypred = torch.exp(ypred)-1
+                ypred = torch.clamp(ypred,min=0) # Safety clamp to ensure non-negative
         return ypred.cpu().numpy()
-
+        
     def evaluate(self,X,y):
         '''
         Purpose: Evaluate the trained model on provided feature(s) and target data using the specified loss criterion.

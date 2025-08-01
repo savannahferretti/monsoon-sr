@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=400GB
+#SBATCH --mem=800GB
 #SBATCH --time=06:00:00
 #SBATCH --constraint=cpu
 #SBATCH --licenses=cfs
@@ -13,8 +13,7 @@
 #SBATCH --mail-type=ALL
 
 # Load necessary modules
-module load python
-module load conda
+module load python conda
 
 # Activate the Conda environment
 CONDADIR='/global/homes/s/sferrett/.conda/envs/monsoon-sr'
