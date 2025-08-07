@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=100GB
+#SBATCH --mem=200GB
 #SBATCH --time=10:00:00
 #SBATCH --constraint=cpu
 #SBATCH --licenses=cfs

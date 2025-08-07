@@ -1,4 +1,6 @@
 import os
+import gc
+import psutil
 import xesmf
 import logging
 import warnings
@@ -10,27 +12,28 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-AUTHOR  = 'Savannah L. Ferretti'      
-EMAIL   = 'savannah.ferretti@uci.edu' 
-FILEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
-SAVEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
+AUTHOR    = 'Savannah L. Ferretti'      
+EMAIL     = 'savannah.ferretti@uci.edu' 
+FILEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
+SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
+CHUNKSIZE = 21
 
-def load(filename,filedir=FILEDIR):
+def get_data(filename,filedir=FILEDIR):
     '''
-    Purpose: Load a NetCDF file as an xarray.DataArray and check level ordering (if applicable).
+    Purpose: Import a NetCDF file as an xarray.DataArray and check level ordering (if applicable).
     Args:
-    - filename (str): name of the file to load
+    - filename (str): name of the file to import
     - filedir (str): directory containing the file (defaults to FILEDIR)
     Returns:
-    - xarray.DataArray: loaded DataArray (with level coordinate ordered if applicable) 
+    - xarray.DataArray: lazily imported DataArray (with level coordinate ordered if applicable) 
     '''
     filepath = os.path.join(filedir,filename)
-    da  = xr.open_dataarray(filepath)
+    da  = xr.open_dataarray(filepath,engine='h5netcdf')
     if 'lev' in da.dims:
         if not da.lev.diff('lev').all()>0:
             da = da.reindex(lev=sorted(da.lev))
-            logger.info(f'Levels reordered from {da.lev.values[0]} to {da.lev.values[-1]} hPa')
-    return da.load()
+            logger.info(f'   Levels for {filename} were reordered')
+    return da
     
 def get_p_array(da):
     '''
@@ -103,25 +106,24 @@ def calc_thetae(p,t,q=None,ps=None):
     Returns:
     - xarray.DataArray: (regular, surface, or saturated) equivalent potential temperature DataArray (K)
     '''
-    if q is None:
-        qs = calc_qs(p,t)
-        q  = qs
-    if ps is not None:
-        tsurf = t.interp(lev=ps)
-        if q is not None:
-            qsurf = q.interp(lev=ps)
-        t = tsurf
-        q = qsurf
-        p = ps
     p0 = 1000.  
     rv = 461.5  
     rd = 287.04
     epsilon = rd/rv
+    if q is None:
+        q = calc_qs(p,t)
+    if ps is not None:
+        t = t.interp(lev=ps)
+        q = q.interp(lev=ps)
+        p = ps
+        pvalues = ps
+    else:
+        pvalues = p.lev
     r  = q/(1.-q) 
-    e  = (p.lev*r)/(epsilon+r)
+    e  = (pvalues*r)/(epsilon+r)
     tl = 2840./(3.5*np.log(t)-np.log(e)-4.805)+55.
     thetae = t*(p0/p)**(0.2854*(1.-0.28*r))*np.exp((3.376/tl-0.00254)*1000.*r*(1.+0.81*r))
-    return thetae
+    return thetae 
 
 def filter_above_surface(da,ps):
     '''
@@ -275,25 +277,16 @@ def save(ds,savedir=SAVEDIR):
     filepath  = os.path.join(savedir,filename)
     logger.info(f'Attempting to save {filename}...')   
     try:
-        ds.to_netcdf(filepath)
-        logger.info(f'File written successfully: {filename}')
+        ds.to_netcdf(filepath,format='NETCDF4',engine='h5netcdf')
+        logger.info(f'   File writing successful: {filename}')
+        with xr.open_dataset(filepath) as test:
+            pass
+        logger.info(f'   File verification successful: {filename}')
+        return True
     except Exception as e:
-        logger.error(f'Failed to write {filename}: {e}')
+        logger.error(f'   Failed to save or verify {filename}: {e}')
         return False
-    try:
-        with xr.open_dataset(filepath) as testds:
-            logger.info(f'File verification successful: {filename}')
-            return True
-    except Exception as e:
-        logger.warning(f'File saved but verification failed for {filename}: {e}')
-        if os.path.exists(filepath):
-            filesize = os.path.getsize(filepath)/(1024**3)
-            logger.info(f'File exists with size {filesize:.2f} GB; considering save successful')
-            return True
-        else:
-            logger.error(f'File does not exist after save: {filename}')
-            return False
-
+        
 if __name__=='__main__':
     try:
         logger.info('Importing all raw variables...')        
@@ -306,7 +299,7 @@ if __name__=='__main__':
         del pr
         logger.info('Beginning chunking...')
         timechunks   = np.array_split(np.arange(len(ps.time)),CHUNKSIZE)
-        chunkresults = {
+        results = {
             't':[],
             'q':[],
             'capeprofile':[],
@@ -316,7 +309,6 @@ if __name__=='__main__':
             'bl':[]}
         for i,timechunk in enumerate(timechunks):
             logger.info(f'Processing time chunk {i+1}/{len(timechunks)}...')
-            logger.info('   Loading in raw ERA5 variables chunks...')
             tchunk  = t.isel(time=timechunk).load()
             qchunk  = q.isel(time=timechunk).load()
             pschunk = ps.isel(time=timechunk).load()
@@ -331,103 +323,45 @@ if __name__=='__main__':
             filteredqchunk = filter_above_surface(qchunk,pschunk)
             filteredthetaechunk  = filter_above_surface(thetaechunk,pschunk)
             filteredthetaeschunk = filter_above_surface(thetaeschunk,pschunk)
-            del tchunk,qchunk,thetaechunk,thetaeschunk
+            del tchunk,qchunk,thetaechunk,thetaeschunk            
             logger.info('  Calculate CAPE-like and SUBSAT-like profiles...')    
             capeprofilechunk   = thetaesurfchunk-filteredthetaeschunk
             subsatprofilechunk = filteredthetaeschunk-filteredthetaechunk
             del thetaesurfchunk
-            logger.info('   Calculating BL terms...')
+            logger.info('   Calculate layer averages...')
             pbltopchunk = pschunk-100.
             lfttopchunk = xr.full_like(pschunk,500.) 
             thetaebchunk    = calc_layer_average(filteredthetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
             thetaelchunk    = calc_layer_average(filteredthetaechunk,pbltopchunk,lfttopchunk)
             thetaelschunk   = calc_layer_average(filteredthetaeschunk,pbltopchunk,lfttopchunk)
             wbchunk,wlchunk = calc_weights(pschunk,pbltopchunk,lfttopchunk)
+            del pschunk,pbltopchunk,lfttopchunk,filteredthetaechunk,filteredthetaeschunk
+            logger.info('   Calculating BL terms...')
             capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelschunk,wbchunk,wlchunk)
-            del pbltopchunk,lfttopchunk,wbchunk,wlchunk
+            del wbchunk,wlchunk,thetaebchunk,thetaelchunk,thetaelschunk
             logger.info('   Appending chunk results...')
-            chunkresults['t'].append(filteredtchunk)
-            chunkresults['q'].append(filteredqchunk)
-            chunkresults['capeprofile'].append(capeprofilechunk)
-            chunkresults['subsatprofile'].append(subsatprofilechunk)
-            chunkresults['cape'].append(capechunk)
-            chunkresults['subsat'].append(subsatchunk)
-            chunkresults['bl'].append(blchunk)
-            del (pschunk,filteredtchunk,filteredqchunk,filteredthetaechunk,filteredthetaeschunk,capeprofilechunk,subsatprofilechunk,
-                 thetaebchunk,thetaelchunk,thetaelschunk,capechunk,subsatchunk,blchunk)
+            results['t'].append(filteredtchunk)
+            results['q'].append(filteredqchunk)
+            results['capeprofile'].append(capeprofilechunk)
+            results['subsatprofile'].append(subsatprofilechunk)
+            results['cape'].append(capechunk)
+            results['subsat'].append(subsatchunk)
+            results['bl'].append(blchunk)
+            del filteredtchunk,filteredqchunk,capeprofilechunk,subsatprofilechunk,capechunk,subsatchunk,blchunk
         del ps,t,q
         logger.info('Concatenating results and saving...')
-        finalresults = {}
-        for key,chunks in chunkresults.items():
-            finalresults[key] = xr.concat(chunks,dim='time')
-            del chunks
         dslist = [
             dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
-            dataset(finalresults['t'],'t','Filtered air temperature','K'),
-            dataset(finalresults['q'],'q','Filtered specific humidity','kg/kg'),
-            dataset(finalresults['capeprofile'],'capeprofile','Equivalent potential temperature at the surface minus saturated equivalent potential temperature','K'),
-            dataset(finalresults['subsatprofile'],'subsatprofile','Saturated equivalent potential temperature minus equivalent potential temperature','K'),   
-            dataset(finalresults['cape'],'cape','Undilute buoyancy in the lower troposphere','K'),
-            dataset(finalresults['subsat'],'subsat','Lower free-tropospheric subsaturation','K'),
-            dataset(finalresults['bl'],'bl','Average buoyancy in the lower troposphere','m/s²')]
+            dataset(xr.concat(results['t'],dim='time'),'t','Filtered air temperature','K'),
+            dataset(xr.concat(results['q'],dim='time'),'q','Filtered specific humidity','kg/kg'),
+            dataset(xr.concat(results['capeprofile'],dim='time'),'capeprofile','Equivalent potential temperature at the surface minus saturated equivalent potential temperature','K'),
+            dataset(xr.concat(results['subsatprofile'],dim='time'),'subsatprofile','Saturated equivalent potential temperature minus equivalent potential temperature','K'),   
+            dataset(xr.concat(results['cape'],dim='time'),'cape','Undilute buoyancy in the lower troposphere','K'),
+            dataset(xr.concat(results['subsat'],dim='time'),'subsat','Lower free-tropospheric subsaturation','K'),
+            dataset(xr.concat(results['bl'],dim='time'),'bl','Average buoyancy in the lower troposphere','m/s²')]
         for ds in dslist:
             save(ds)
             del ds
         logger.info('Script execution completed successfully!')
     except Exception as e:
         logger.error(f'An unexpected error occurred: {str(e)}')
-        
-# if __name__ == '__main__':
-#     try:
-#         logger.info('Loading raw variables...')        
-#         pr = load('IMERG_V06_precipitation_rate.nc')
-#         ps = load('ERA5_surface_pressure.nc')
-#         t  = load('ERA5_air_temperature.nc')
-#         q  = load('ERA5_specific_humidity.nc')
-#         p  = get_p_array(q)
-#         logger.info('Resampling/regridding precipitation...')
-#         resampledpr = regrid_and_resample(pr,ps)
-#         del pr
-#         logger.info('Calculate equivalent potential temperature terms...')
-#         thetae     = calc_thetae(p,t,q)
-#         thetaes    = calc_thetae(p,t)
-#         thetaesurf = calc_thetae(p,t,q,ps)
-#         del p
-#         logger.info('Filter out data where the pressure level is below the surface...')    
-#         filteredthetae  = filter_above_surface(thetae,ps)
-#         filteredthetaes = filter_above_surface(thetaes,ps)
-#         filteredt       = filter_above_surface(t,ps)
-#         filteredq       = filter_above_surface(q,ps)
-#         del t,q,thetae,thetaes
-#         logger.info('Calculating layer averages...')
-#         pbltop   = ps-100.
-#         lfttop   = xr.full_like(ps,500.) 
-#         thetaeb  = calc_layer_average(filteredthetae,ps,pbltop)*np.sqrt(-1+2*(ps>lfttop))
-#         thetael  = calc_layer_average(filteredthetae,pbltop,lfttop)
-#         thetaels = calc_layer_average(filteredthetaes,pbltop,lfttop)
-#         wb,wl    = calc_weights(ps,pbltop,lfttop)
-#         del ps,pbltop,lfttop
-#         logger.info('Calculating BL terms...')
-#         cape,subsat,bl  = calc_bl_terms(thetaeb,thetael,thetaels,wb,wl)
-#         logger.info('Formatting and saving variables...')
-#         dslist = [
-#             dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
-#             dataset(filteredt,'t','Filtered air temperature','K'),
-#             dataset(filteredq,'q','Filtered specific humidity','kg/kg'),
-#             dataset(filteredthetae,'thetae','Filtered equivalent potential temperature','K'),
-#             dataset(filteredthetaes,'thetaes','Filtered saturated equivalent potential temperature','K'),
-#             dataset(thetaesurf,'thetaesurf','Equivalent potential temperature at the surface','K'),
-#             dataset(thetaeb,'thetaeb','Filtered equivalent potential temperature averaged over the boundary layer','K'),
-#             dataset(thetael,'thetael','Filtered equivalent potential temperature averaged over the lower free troposphere','K'),
-#             dataset(thetaels,'thetaels','Filtered saturated equivalent potential temperature over the loweer free troposphere','K'),
-#             dataset(wb,'wb','Fractional contribution of boundary layer air','0-1'),
-#             dataset(wl,'wl','Fractional contribution of lower free-tropospheric air','0-1'),            
-#             dataset(cape,'cape','Undilute buoyancy in the lower troposphere','K'),
-#             dataset(subsat,'subsat','Lower free-tropospheric subsaturation','K'),
-#             dataset(bl,'bl','Average buoyancy in the lower troposphere','m/s²')]
-#         for ds in dslist:
-#             save(ds)
-#             del ds
-#         logger.info('Script execution completed successfully!')
-#     except Exception as e:
-#         logger.error(f'An unexpected error occurred: {str(e)}')

@@ -59,8 +59,7 @@ class BASELINE:
         '''
         xvalues = x.values
         binidxs = np.clip(np.digitize(xvalues,self.binedges)-1,0,self.nbins-1)
-        ypred = self.model[binidxs]
-        ypred = np.maximum(ypred,0) # Enforce non-negative constraint
+        ypred   = np.maximum((self.model[binidxs]),0)
         return ypred
 
 class MLPMODEL(torch.nn.Module):
@@ -83,14 +82,16 @@ class MLPMODEL(torch.nn.Module):
         self.logtransform    = logtransform
         layers = []
         layers.append(torch.nn.Linear(inputlayersize,hiddenlayersize))
-        layers.append(self.activation)
+        if not isinstance(self.activation,torch.nn.Identity):
+            layers.append(self.activation)        
         for _ in range(nhiddenlayers-1):
             layers.append(torch.nn.Linear(hiddenlayersize,hiddenlayersize))
-            layers.append(self.activation)
+            if not isinstance(self.activation,torch.nn.Identity):
+                layers.append(self.activation)    
         layers.append(torch.nn.Linear(hiddenlayersize,1))
-        if not self.logtransform:
+        if not self.logtransform and not isinstance(self.activation,torch.nn.Identity):
             layers.append(self.activation)
-        self.layers  = torch.nn.Sequential(*layers)
+        self.layers = torch.nn.Sequential(*layers)
 
     def forward(self,Xtensor):
         '''
@@ -121,7 +122,8 @@ class MLP:
         - randomstate (int): random seed for reproducibility
         - logtransform (bool): whether to apply log transformation to targets (defaults to False)
         '''
-        self.model        = MLPMODEL(inputlayersize,hiddenlayersize,nhiddenlayers,activation)
+        self.model        = MLPMODEL(inputlayersize,hiddenlayersize,nhiddenlayers,activation,logtransform)
+        self.activation   = activation
         self.criterion    = criterion
         self.optimizer    = torch.optim.Adam(self.model.parameters(),lr=learningrate)
         self.nepochs      = nepochs
@@ -176,10 +178,12 @@ class MLP:
                 self.optimizer.zero_grad()
                 batchypred    = self.model(batchX)
                 if self.logtransform:
-                    batchypred = torch.exp(batchypred)-1
+                    batchypred = torch.clamp((torch.exp(batchypred)-1),min=0)
                     batchy     = torch.exp(batchy)-1
                     batchloss  = self.criterion(batchypred,batchy)
                 else:
+                    if isinstance(self.activation,torch.nn.Identity):
+                        batchypred = torch.clamp(batchypred,min=0)
                     batchloss = self.criterion(batchypred,batchy)
                 batchloss.backward()
                 self.optimizer.step()
@@ -193,10 +197,12 @@ class MLP:
                     batchX,batchy = batchX.to(self.device),batchy.to(self.device)
                     batchypred    = self.model(batchX)
                     if self.logtransform:
-                        batchypred = torch.exp(batchypred)-1
+                        batchypred = torch.clamp((torch.exp(batchypred)-1),min=0)
                         batchy     = torch.exp(batchy)-1
                         batchloss  = self.criterion(batchypred,batchy)
                     else:
+                        if isinstance(self.activation,torch.nn.Identity):
+                            batchypred = torch.clamp(batchypred,min=0)
                         batchloss = self.criterion(batchypred,batchy)
                     validloss += batchloss.item()*batchX.size(0)
             validloss /= len(validloader.dataset)
@@ -227,8 +233,12 @@ class MLP:
         with torch.no_grad():
             ypred = self.model(Xtensor)
             if self.logtransform:
-                ypred = torch.exp(ypred)-1
-                ypred = torch.clamp(ypred,min=0) # Safety clamp to ensure non-negative
+                ypred = torch.clamp((torch.exp(ypred)-1),min=0)
+            else:
+                if isinstance(self.activation,torch.nn.Identity):
+                    ypred = torch.clamp(ypred,min=0)
+                else:
+                    ypred = torch.clamp(ypred,min=0)
         return ypred.cpu().numpy()
         
     def evaluate(self,X,y):
@@ -240,6 +250,153 @@ class MLP:
         Returns:
         - float: loss value computed using the model's criterion
         '''
+        Xtensor = self._tensor(X).to(self.device)
+        ytensor = self._tensor(y).to(self.device)
+        self.model.eval()
+        with torch.no_grad():
+            ypred = self.model(Xtensor)
+            if self.logtransform:
+                ypred   = torch.clamp((torch.exp(ypred)-1),min=0)
+                ytensor = torch.exp(ytensor)-1
+                loss    = self.criterion(ypred,ytensor).item()
+            else:
+                if isinstance(self.activation,torch.nn.Identity):
+                    ypred = torch.clamp(ypred,min=0)
+                loss = self.criterion(ypred,ytensor).item()
+        return loss
+
+
+
+
+class MLPMODELV2(torch.nn.Module):
+    
+    def __init__(self,inputlayersize,depth):
+        super(MLPMODELV2,self).__init__()
+        if depth=='shallow':
+            # 2 hidden layers: input → 128 → 64 → 1
+            self.layers = torch.nn.Sequential(
+                torch.nn.Linear(inputlayersize,128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.GELU(),
+                torch.nn.Linear(128,64),
+                torch.nn.BatchNorm1d(64),
+                torch.nn.GELU(),
+                torch.nn.Linear(64,1),
+                torch.nn.ReLU())
+        elif depth=='medium':
+            # 3 hidden layers: input → 256 → 128 → 64 → 1
+            self.layers = torch.nn.Sequential(
+                torch.nn.Linear(inputlayersize,256),
+                torch.nn.BatchNorm1d(256),
+                torch.nn.GELU(),
+                torch.nn.Linear(256,128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.GELU(),
+                torch.nn.Linear(128,64),
+                torch.nn.BatchNorm1d(64),
+                torch.nn.GELU(),
+                torch.nn.Linear(64,1),
+                torch.nn.ReLU())
+        elif depth=='deep':
+            # 4 hidden layers: input → 256 → 128 → 64 → 64 → 1
+            self.layers = torch.nn.Sequential(
+                torch.nn.Linear(inputlayersize,256),
+                torch.nn.BatchNorm1d(256),
+                torch.nn.GELU(),
+                torch.nn.Linear(256,128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.GELU(),
+                torch.nn.Linear(128,64),
+                torch.nn.BatchNorm1d(64),
+                torch.nn.GELU(),
+                torch.nn.Linear(64,64),
+                torch.nn.BatchNorm1d(64),
+                torch.nn.GELU(),
+                torch.nn.Linear(64,1),
+                torch.nn.ReLU())
+        else:
+            raise ValueError(f"Invalid depth '{depth}'. Choose from 'shallow', 'medium', 'deep'")
+
+    def forward(self,Xtensor):
+        return self.layers(Xtensor)
+
+class MLPV2:
+    def __init__(self,inputlayersize,depth,criterion):
+        self.model = MLPMODELV2(inputlayersize,depth)
+        self.criterion    = criterion
+        self.optimizer    = torch.optim.Adam(self.model.parameters(),lr=.001)
+        self.nepochs      = 30
+        self.batchsize    = 500
+        self.validsize    = 0.2
+        self.patience     = 5
+        self.randomstate  = 42
+        self.device       = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(self.device)
+
+    def _tensor(self,data):
+        if isinstance(data,pd.Series):
+            return torch.FloatTensor(data.values.reshape(-1,1))
+        elif isinstance(data,pd.DataFrame):
+            return torch.FloatTensor(data.values)
+        else:
+            raise ValueError('Unsupported data type. Please provide a pd.Series or pd.DataFrame.')
+
+    def fit(self,X,y):
+        Xtensor = self._tensor(X)
+        ytensor = self._tensor(y)
+        Xtrain,Xvalid,ytrain,yvalid = train_test_split(Xtensor,ytensor,test_size=self.validsize,random_state=self.randomstate)
+        traindataset = TensorDataset(Xtrain,ytrain)
+        validdataset = TensorDataset(Xvalid,yvalid)
+        trainloader  = DataLoader(traindataset,batch_size=self.batchsize,shuffle=True)
+        validloader  = DataLoader(validdataset,batch_size=self.batchsize,shuffle=False)
+        trainlosses  = []
+        validlosses  = []
+        bestvalidloss   = float('inf')
+        patiencecounter = 0
+        for epoch in range(self.nepochs):
+            self.model.train()
+            trainloss = 0.0
+            for batchX,batchy in trainloader:
+                batchX,batchy = batchX.to(self.device),batchy.to(self.device)
+                self.optimizer.zero_grad()
+                batchypred = self.model(batchX)
+                batchloss  = self.criterion(batchypred,batchy)
+                batchloss.backward()
+                self.optimizer.step()
+                trainloss += batchloss.item()*batchX.size(0)
+            trainloss /= len(trainloader.dataset)
+            trainlosses.append(trainloss)
+            self.model.eval()
+            validloss = 0.0
+            with torch.no_grad():
+                for batchX,batchy in validloader:
+                    batchX,batchy = batchX.to(self.device),batchy.to(self.device)
+                    batchypred    = self.model(batchX)
+                    batchloss     = self.criterion(batchypred,batchy)
+                    validloss    += batchloss.item()*batchX.size(0)
+            validloss /= len(validloader.dataset)
+            validlosses.append(validloss)
+            print(f'Epoch {epoch+1}/{self.nepochs} - Training Loss: {trainloss:.3f} - Validation Loss: {validloss:.3f}')
+            if validloss<bestvalidloss:
+                bestvalidloss   = validloss
+                patiencecounter = 0
+                torch.save(self.model.state_dict(),f'{MODELDIR}/mlp/temp_best_model.pth')
+            else:
+                patiencecounter += 1
+                if patiencecounter>=self.patience:
+                    print(f'Early stopping triggered after {epoch+1} epochs')
+                    self.model.load_state_dict(torch.load(f'{MODELDIR}/mlp/temp_best_model.pth'))
+                    break
+        return (trainlosses,validlosses)
+
+    def predict(self,X):
+        Xtensor = self._tensor(X).to(self.device)
+        self.model.eval()
+        with torch.no_grad():
+            ypred = self.model(Xtensor)
+        return ypred.cpu().numpy()
+        
+    def evaluate(self,X,y):
         Xtensor = self._tensor(X).to(self.device)
         ytensor = self._tensor(y).to(self.device)
         self.model.eval()

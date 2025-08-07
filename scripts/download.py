@@ -38,10 +38,10 @@ def get_era5():
     try:
         store = 'gs://gcp-public-data-arco-era5/ar/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2/'
         ds = xr.open_zarr(store,decode_times=True)  
-        logger.info('Successfully fetched ERA5')
+        logger.info('   Successfully fetched ERA5')
         return ds
     except Exception as e:
-        logger.error(f'Failed to fetch ERA5: {str(e)}')
+        logger.error(f'   Failed to fetch ERA5: {str(e)}')
         return None
 
 def get_imerg():
@@ -55,10 +55,10 @@ def get_imerg():
         catalog = pystac.Client.open(store, modifier=planetary_computer.sign_inplace)
         assets  = catalog.get_collection('gpm-imerg-hhr').assets['zarr-abfs']
         ds      = xr.open_zarr(fsspec.get_mapper(assets.href,**assets.extra_fields['xarray:storage_options']),consolidated=True)
-        logger.info('Successfully fetched IMERG')
+        logger.info('   Successfully fetched IMERG')
         return ds
     except Exception as e:
-        logger.error(f'Failed to fetch IMERG: {str(e)}')
+        logger.error(f'   Failed to fetch IMERG: {str(e)}')
         return None
 
 def standardize(da):
@@ -127,7 +127,7 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     if 'lev' in ds.dims:
         ds.lev.attrs = dict(long_name='Pressure level',units='hPa')
     ds.attrs = dict(history=f'Created on {datetime.today().strftime("%Y-%m-%d")} by {author} ({email})')
-    logger.info(f'{shortname}: {ds.nbytes*1e-9:.2f} GB')
+    logger.info(f'   {longname} size: {ds.nbytes*1e-9:.2f} GB')
     return ds
 
 def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE,author=AUTHOR,email=EMAIL):
@@ -168,33 +168,35 @@ def save(ds,savedir=SAVEDIR):
     filepath  = os.path.join(savedir,filename)
     logger.info(f'Attempting to save {filename}...')   
     try:
-        ds.to_netcdf(filepath)
-        logger.info(f'File writing successful: {filename}')
+        ds.to_netcdf(filepath,format='NETCDF4',engine='h5netcdf')
+        logger.info(f'   File writing successful: {filename}')
         with xr.open_dataset(filepath) as test:
             pass
-        logger.info(f'File verification successful: {filename}')
+        logger.info(f'   File verification successful: {filename}')
         return True
     except Exception as e:
-        logger.error(f'Failed to save or verify {filename}: {e}')
+        logger.error(f'   Failed to save or verify {filename}: {e}')
         return False
 
 if __name__=='__main__':
     try:
         logger.info('Fetching ERA5 and IMERG data...')
         era5  = get_era5()
-        imerg = get_imerg()
+        # imerg = get_imerg()
         logger.info('Extracting variable data...')
-        pr = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24 # mm/hr to mm/day
-        ps = era5.surface_pressure/100 # Pa to hPa
-        t  = era5.temperature
-        q  = era5.specific_humidity
-        del era5,imerg
+        # prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24
+        # psdata = era5.surface_pressure/100
+        tdata  = era5.temperature
+        qdata  = era5.specific_humidity
+        del era5 #,imerg
         logger.info('Processing and saving variables...')
         dslist = [
-            process(pr,'pr','IMERG V06 precipitation rate','mm/day'),
-            process(ps,'ps','ERA5 surface pressure','hPa'),
-            process(t,'t','ERA5 air temperature','K'),
-            process(q,'q','ERA5 specific humidity','kg/kg')]
+            # process(prdata,'pr','IMERG V06 precipitation rate','mm/day'),
+            # process(psdata,'ps','ERA5 surface pressure','hPa'),
+            process(tdata,'t','ERA5 air temperature','K'),
+            process(qdata,'q','ERA5 specific humidity','kg/kg')]
+        # del prdata,psdata,tdata,qdata
+        del tdata,qdata
         for ds in dslist:
             save(ds)
             del ds
