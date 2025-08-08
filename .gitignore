@@ -6,12 +6,15 @@ data/raw/*
 data/interim/*
 data/processed/*
 data/external/*
+data/results/*
 
 # Exception to the rule - keep .gitkeep files
 !data/raw/.gitkeep
 !data/interim/.gitkeep
 !data/processed/.gitkeep
 !data/external/.gitkeep
+!data/results/.gitkeep
 
-# Ignore large NetCDF data files
+# Ignore specific file types
 *.nc                      
+*.pkl
