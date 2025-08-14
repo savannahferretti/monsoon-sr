@@ -24,7 +24,7 @@ def load(varname,filedir=FILEDIR):
     Returns:
     - xarray.DataArray: loaded variable DataArray 
     '''
-    filename = 'LR_ERA5_IMERG_pr_bl_terms.nc'
+    filename = f'{varname}.nc'
     filepath = os.path.join(filedir,filename)
     ds = xr.open_dataset(filepath)
     da = ds[varname].load()
@@ -71,14 +71,14 @@ def save(data,filename,savedir=SAVEDIR):
     except Exception as e:
         logger.error(f'Failed to save {filename}: {e}')
         return False
-
+        
 if __name__=='__main__':
     try:
         logger.info('Loading data...')
-        bl     = load('bl')
+        pr  = load('pr')
+        bl  = load('bl')
         cape   = load('cape')
         subsat = load('subsat')
-        pr     = load('pr')
         logger.info('Preparing train/test splits...')
         Xtrain,Xtest,ytrain,ytest = prepare([bl,cape,subsat],pr)
         ytrainlog = np.log(ytrain+1)

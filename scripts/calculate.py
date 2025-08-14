@@ -1,6 +1,7 @@
+#!/usr/bin/env python
+
 import os
 import gc
-import psutil
 import xesmf
 import logging
 import warnings
@@ -28,7 +29,7 @@ def get_data(filename,filedir=FILEDIR):
     - xarray.DataArray: lazily imported DataArray (with level coordinate ordered if applicable) 
     '''
     filepath = os.path.join(filedir,filename)
-    da  = xr.open_dataarray(filepath,engine='h5netcdf')
+    da = xr.open_dataarray(filepath,engine='h5netcdf')
     if 'lev' in da.dims:
         if not da.lev.diff('lev').all()>0:
             da = da.reindex(lev=sorted(da.lev))
@@ -113,10 +114,11 @@ def calc_thetae(p,t,q=None,ps=None):
     if q is None:
         q = calc_qs(p,t)
     if ps is not None:
-        t = t.interp(lev=ps)
-        q = q.interp(lev=ps)
-        p = ps
-        pvalues = ps
+        psclamped = xr.where(ps>1000.,1000.,ps)
+        t = t.interp(lev=psclamped)
+        q = q.interp(lev=psclamped)
+        p = psclamped
+        pvalues = psclamped
     else:
         pvalues = p.lev
     r  = q/(1.-q) 
@@ -293,7 +295,7 @@ if __name__=='__main__':
         pr = get_data('IMERG_V06_precipitation_rate.nc')
         ps = get_data('ERA5_surface_pressure.nc')
         t  = get_data('ERA5_air_temperature.nc')
-        q  = get_data('ERA5_specific_humidity.nc')
+        q  = get_data('ERA5_specific_humidity_V0.nc')
         logger.info('Resampling/regridding precipitation...')
         resampledpr = regrid_and_resample(pr.load(),ps.load())
         del pr
@@ -313,22 +315,22 @@ if __name__=='__main__':
             qchunk  = q.isel(time=timechunk).load()
             pschunk = ps.isel(time=timechunk).load()
             pchunk  = get_p_array(qchunk)
-            logger.info('   Calculate equivalent potential temperature terms...')
+            logger.info('   Calculating equivalent potential temperature terms...')
             thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
             thetaeschunk    = calc_thetae(pchunk,tchunk)
             thetaesurfchunk = calc_thetae(pchunk,tchunk,qchunk,pschunk)
             del pchunk
-            logger.info('   Filter out data where the pressure level is below the surface...')    
+            logger.info('   Filtering out data where the pressure level is below the surface...')    
             filteredtchunk = filter_above_surface(tchunk,pschunk)
             filteredqchunk = filter_above_surface(qchunk,pschunk)
             filteredthetaechunk  = filter_above_surface(thetaechunk,pschunk)
             filteredthetaeschunk = filter_above_surface(thetaeschunk,pschunk)
             del tchunk,qchunk,thetaechunk,thetaeschunk            
-            logger.info('  Calculate CAPE-like and SUBSAT-like profiles...')    
+            logger.info('   Calculating CAPE-like and SUBSAT-like profiles...')    
             capeprofilechunk   = thetaesurfchunk-filteredthetaeschunk
             subsatprofilechunk = filteredthetaeschunk-filteredthetaechunk
             del thetaesurfchunk
-            logger.info('   Calculate layer averages...')
+            logger.info('   Calculating layer averages...')
             pbltopchunk = pschunk-100.
             lfttopchunk = xr.full_like(pschunk,500.) 
             thetaebchunk    = calc_layer_average(filteredthetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
@@ -354,8 +356,8 @@ if __name__=='__main__':
             dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
             dataset(xr.concat(results['t'],dim='time'),'t','Filtered air temperature','K'),
             dataset(xr.concat(results['q'],dim='time'),'q','Filtered specific humidity','kg/kg'),
-            dataset(xr.concat(results['capeprofile'],dim='time'),'capeprofile','Equivalent potential temperature at the surface minus saturated equivalent potential temperature','K'),
-            dataset(xr.concat(results['subsatprofile'],dim='time'),'subsatprofile','Saturated equivalent potential temperature minus equivalent potential temperature','K'),   
+            dataset(xr.concat(results['capeprofile'],dim='time'),'capeprofile','θₑ(surface) - saturated θₑ(p)','K'),
+            dataset(xr.concat(results['subsatprofile'],dim='time'),'subsatprofile','Saturated θₑ(p) - θₑ(p)','K'),   
             dataset(xr.concat(results['cape'],dim='time'),'cape','Undilute buoyancy in the lower troposphere','K'),
             dataset(xr.concat(results['subsat'],dim='time'),'subsat','Lower free-tropospheric subsaturation','K'),
             dataset(xr.concat(results['bl'],dim='time'),'bl','Average buoyancy in the lower troposphere','m/s²')]

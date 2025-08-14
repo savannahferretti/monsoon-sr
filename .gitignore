@@ -17,4 +17,8 @@ data/results/*
 
 # Ignore specific file types
 *.nc                      
+*.h5
+*.json
 *.pkl
+*.sh
+*.parquet
