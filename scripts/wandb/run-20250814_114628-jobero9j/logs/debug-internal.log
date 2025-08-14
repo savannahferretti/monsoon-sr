@@ -1,0 +1,13 @@
+{"time":"2025-08-14T11:46:28.810411217-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-08-14T11:46:29.075582649-07:00","level":"INFO","msg":"stream: created new stream","id":"jobero9j"}
+{"time":"2025-08-14T11:46:29.075866166-07:00","level":"INFO","msg":"stream: started","id":"jobero9j"}
+{"time":"2025-08-14T11:46:29.075876897-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"jobero9j"}
+{"time":"2025-08-14T11:46:29.07589398-07:00","level":"INFO","msg":"handler: started","stream_id":"jobero9j"}
+{"time":"2025-08-14T11:46:29.075889852-07:00","level":"INFO","msg":"sender: started","stream_id":"jobero9j"}
+{"time":"2025-08-14T12:03:52.146088126-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-14T12:03:52.448623837-07:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading history steps 29-30, summary, console lines 29-29","runtime_seconds":0.301331345}],"total_operations":1}}
+{"time":"2025-08-14T12:03:52.514873612-07:00","level":"INFO","msg":"stream: closing","id":"jobero9j"}
+{"time":"2025-08-14T12:03:52.515191055-07:00","level":"INFO","msg":"handler: closed","stream_id":"jobero9j"}
+{"time":"2025-08-14T12:03:52.515222676-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"jobero9j"}
+{"time":"2025-08-14T12:03:52.515249107-07:00","level":"INFO","msg":"sender: closed","stream_id":"jobero9j"}
+{"time":"2025-08-14T12:03:52.517401955-07:00","level":"INFO","msg":"stream: closed","id":"jobero9j"}

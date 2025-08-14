@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import pickle
 import logging
@@ -13,22 +15,43 @@ warnings.filterwarnings('ignore')
 
 FILEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
 SAVEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
+NYEARS   = 3
 TESTSIZE = 0.2
 
-def load(varname,filedir=FILEDIR):
+def get_time_idxs(reffile,nyears=NYEARS,filedir=FILEDIR):
     '''
-    Purpose: Load a variable from a NetCDF file as an xarray.DataArray.
+    Purpose: Generate random time indices that can be used across all variables.
+    Args:
+    - reffile (str): name of a reference variable file to get time dimension
+    - nyears (float): number of years worth of data to sample (defaults to NYEARS)
+    - filedir (str): directory containing the files (defaults to FILEDIR)
+    Returns:
+    - numpy.ndarray: sorted array of random time indices
+    '''
+    filepath = os.path.join(filedir,f'{reffile}.nc')
+    da = xr.open_dataarray(filepath).load()
+    allsamples     = len(da.time)
+    allyears       = np.unique(da.time.dt.year.values)
+    samplesperyear = allsamples/len(allyears)
+    nsamples       = int(nyears*samplesperyear)
+    timeidxs       = np.sort(np.random.choice(allsamples,size=nsamples,replace=False))
+    return timeidxs
+
+def load(varname,timeidxs=None,filedir=FILEDIR):
+    '''
+    Purpose: Load a variable from a NetCDF file as an xarray.DataArray with optional time subsetting.
     Args:
     - varname (str): name of the variable to load
+    - timeidxs (np.ndarray, optional): specific time indices to select
     - filedir (str): directory containing the file (defaults to FILEDIR)
     Returns:
     - xarray.DataArray: loaded variable DataArray 
     '''
     filename = f'{varname}.nc'
     filepath = os.path.join(filedir,filename)
-    ds = xr.open_dataset(filepath)
-    da = da.sel(time=(da.time.dt.year.isin([2000,2010))
-    da = ds[varname].load()
+    da = xr.open_dataarray(filepath).load()
+    if timeidxs is not None:
+        da = da.isel(time=timeidxs)
     return da
 
 def prepare(X,y,testsize=TESTSIZE):
@@ -85,15 +108,17 @@ def save(data,filename,savedir=SAVEDIR):
         
 if __name__=='__main__':
     try:
+        logger.info('Generating random time indexes...')
+        timeidxs = get_time_idxs('pr')
         logger.info('Loading data...')
-        t = load('t')
-        q = load('q')
-        pr  = load('pr')
-        bl  = load('bl')
-        cape   = load('cape')
-        subsat = load('subsat')
-        capeprofile   = load('capeprofile')
-        subsatprofile = load('subsatprofile')
+        t             = load('t',timeidxs=timeidxs)
+        q             = load('q',timeidxs=timeidxs)
+        pr            = load('pr',timeidxs=timeidxs)
+        bl            = load('bl',timeidxs=timeidxs)
+        cape          = load('cape',timeidxs=timeidxs)
+        subsat        = load('subsat',timeidxs=timeidxs)
+        capeprofile   = load('capeprofile',timeidxs=timeidxs)
+        subsatprofile = load('subsatprofile',timeidxs=timeidxs)
         logger.info('Preparing train/test splits...')
         Xtrain,Xtest,ytrain,ytest = prepare([bl,cape,subsat,capeprofile,subsatprofile,t,q],pr)
         logger.info('Saving training data...')

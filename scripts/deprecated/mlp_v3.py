@@ -8,6 +8,17 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset,DataLoader
 
+import wandb
+wandb.login()
+
+run = wandb.init(
+    project='MLP Testing', 
+    name=f'Experiment 
+    notes='First wandb-tracked run, making sure it works',
+    config={
+        'learning_rate':0.0001,
+        'epochs':30})
+
 logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
@@ -237,22 +248,26 @@ def process(Xtrain,ytrain,Xtest,ytest,expname=None,configs=CONFIGS,modeldir=MODE
         nparams  = sum(p.numel() for p in mlp.model.parameters())
         losses   = mlp.fit(Xtrain,ytrain)
         ypred    = mlp.predict(Xtest)
-        testloss = mlp.evaluate(Xtest,ytest)
-        filename = f'best_model_{configname}_{expname}.pth' if expname else f'best_model_{configname}.pth'
-        filepath = os.path.join(modeldir,filename)
-        torch.save(mlp.model.state_dict(),filepath)
-        results[configname] = {
-            'description':description,
-            'experiment':expname,
-            'trainlosses':losses[0],
-            'validlosses':losses[1],
-            'testloss':testloss,
-            'nparams':nparams,
-            'ypred':ypred}
+        # testloss = mlp.evaluate(Xtest,ytest)
+
+        wandb.log({'Accuracy':mlp.evaluate(Xtest,ytest)})
+        wandb.finish()
+        
+        # filename = f'best_model_{configname}_{expname}.pth' if expname else f'best_model_{configname}.pth'
+        # filepath = os.path.join(modeldir,filename)
+        # torch.save(mlp.model.state_dict(),filepath)
+        # results[configname] = {
+        #     'description':description,
+        #     'experiment':expname,
+        #     'trainlosses':losses[0],
+        #     'validlosses':losses[1],
+            # 'testloss':testloss,
+            # 'nparams':nparams,
+            # 'ypred':ypred}
         del mlp
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    return results
+        # if torch.cuda.is_available():
+        #     torch.cuda.empty_cache()
+    # return results
 
 if __name__=='__main__':
     logger.info('Load in training/testing data...')
@@ -264,11 +279,11 @@ if __name__=='__main__':
         return [col for col in df.columns if col.startswith(prefix)]
     experiments = {
         '1':{'X':['bl'],'description':'$\mathit{B_L}$'},
-        '2':{'X':['cape','subsat'],'description':'$CAPE_L$ and $SUBSAT_L$'},
-        '3':{'X':get_cols(Xtrain,'capeprofile'),'description':'$CAPE_L$ Profile'},
-        '4':{'X':get_cols(Xtrain,'subsatprofile'),'description':'$SUBSAT_L$ Profile'},
-        '5':{'X':(get_cols(Xtrain,'capeprofile')+get_cols(Xtrain,'subsatprofile')),'description':'$CAPE_L$ and $SUBSAT_L$ Profiles'},
-        '6':{'X':(get_cols(Xtrain,'t')+get_cols(Xtrain,'q')),'description':'$T$ and $q$ Profiles'},
+        # '2':{'X':['cape','subsat'],'description':'$CAPE_L$ and $SUBSAT_L$'},
+        # '3':{'X':get_cols(Xtrain,'capeprofile'),'description':'$CAPE_L$ Profile'},
+        # '4':{'X':get_cols(Xtrain,'subsatprofile'),'description':'$SUBSAT_L$ Profile'},
+        # '5':{'X':(get_cols(Xtrain,'capeprofile')+get_cols(Xtrain,'subsatprofile')),'description':'$CAPE_L$ and $SUBSAT_L$ Profiles'},
+        # '6':{'X':(get_cols(Xtrain,'t')+get_cols(Xtrain,'q')),'description':'$T$ and $q$ Profiles'},
     }   
     logger.info('Training MLP models...')
     for expnum,expconfig in experiments.items():

@@ -182,20 +182,20 @@ if __name__=='__main__':
     try:
         logger.info('Fetching ERA5 and IMERG data...')
         era5  = get_era5()
-        # imerg = get_imerg()
+        imerg = get_imerg()
         logger.info('Extracting variable data...')
-        # prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24
-        # psdata = era5.surface_pressure/100
-        # tdata  = era5.temperature
+        prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24
+        psdata = era5.surface_pressure/100
+        tdata  = era5.temperature
         qdata  = era5.specific_humidity
-        del era5 #,imerg
+        del era5,imerg
         logger.info('Processing and saving variables...')
         dslist = [
-            # process(prdata,'pr','IMERG V06 precipitation rate','mm/day'),
-            # process(psdata,'ps','ERA5 surface pressure','hPa'),
-            # process(tdata,'t','ERA5 air temperature','K'),
+            process(prdata,'pr','IMERG V06 precipitation rate','mm/day'),
+            process(psdata,'ps','ERA5 surface pressure','hPa'),
+            process(tdata,'t','ERA5 air temperature','K'),
             process(qdata,'q','ERA5 specific humidity','kg/kg')]
-        del qdata # del prdata,psdata,tdata,qdata
+        del prdata,psdata,tdata,qdata
         for ds in dslist:
             save(ds)
             del ds

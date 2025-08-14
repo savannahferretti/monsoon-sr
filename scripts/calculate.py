@@ -253,13 +253,15 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     Returns:
     - xarray.Dataset: formatted Dataset
     '''    
-    ds = xr.Dataset(data_vars={shortname:([*da.dims],da.data)},coords={dim:da.coords[dim].data for dim in da.dims})
-    ds[shortname].attrs = dict(long_name=longname,units=units)
+    dims = ('time','lat','lon','lev') if 'lev' in da.dims else ('time','lat','lon')
+    da   = da.transpose(*dims)
+    ds   = xr.Dataset(data_vars={shortname:([*da.dims],da.data)},coords={dim:da.coords[dim].data for dim in da.dims})
+    ds[shortname].attrs = dict(long_name=longname, units=units)
     ds.time.attrs = dict(long_name='Time')
-    ds.lat.attrs  = dict(long_name='Latitude',units='°N')
-    ds.lon.attrs  = dict(long_name='Longitude',units='°E')
+    ds.lat.attrs = dict(long_name='Latitude', units='°N')
+    ds.lon.attrs = dict(long_name='Longitude', units='°E')
     if 'lev' in ds.dims:
-        ds.lev.attrs = dict(long_name='Pressure level',units='hPa')
+        ds.lev.attrs = dict(long_name='Pressure level', units='hPa')
     ds.attrs = dict(history=f'Created on {datetime.today().strftime("%Y-%m-%d")} by {author} ({email})')
     logger.info(f'{shortname}: {ds.nbytes*1e-9:.2f} GB')
     return ds
@@ -295,7 +297,7 @@ if __name__=='__main__':
         pr = get_data('IMERG_V06_precipitation_rate.nc')
         ps = get_data('ERA5_surface_pressure.nc')
         t  = get_data('ERA5_air_temperature.nc')
-        q  = get_data('ERA5_specific_humidity_V0.nc')
+        q  = get_data('ERA5_specific_humidity.nc')
         logger.info('Resampling/regridding precipitation...')
         resampledpr = regrid_and_resample(pr.load(),ps.load())
         del pr
@@ -315,22 +317,22 @@ if __name__=='__main__':
             qchunk  = q.isel(time=timechunk).load()
             pschunk = ps.isel(time=timechunk).load()
             pchunk  = get_p_array(qchunk)
-            logger.info('   Calculating equivalent potential temperature terms...')
+            logger.info('   Calculating equivalent potential temperature terms')
             thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
             thetaeschunk    = calc_thetae(pchunk,tchunk)
             thetaesurfchunk = calc_thetae(pchunk,tchunk,qchunk,pschunk)
             del pchunk
-            logger.info('   Filtering out data where the pressure level is below the surface...')    
+            logger.info('   Filtering out data where the pressure level is below the surface')    
             filteredtchunk = filter_above_surface(tchunk,pschunk)
             filteredqchunk = filter_above_surface(qchunk,pschunk)
             filteredthetaechunk  = filter_above_surface(thetaechunk,pschunk)
             filteredthetaeschunk = filter_above_surface(thetaeschunk,pschunk)
             del tchunk,qchunk,thetaechunk,thetaeschunk            
-            logger.info('   Calculating CAPE-like and SUBSAT-like profiles...')    
+            logger.info('   Calculating CAPE-like and SUBSAT-like profiles')    
             capeprofilechunk   = thetaesurfchunk-filteredthetaeschunk
             subsatprofilechunk = filteredthetaeschunk-filteredthetaechunk
             del thetaesurfchunk
-            logger.info('   Calculating layer averages...')
+            logger.info('   Calculating layer averages')
             pbltopchunk = pschunk-100.
             lfttopchunk = xr.full_like(pschunk,500.) 
             thetaebchunk    = calc_layer_average(filteredthetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
@@ -338,10 +340,10 @@ if __name__=='__main__':
             thetaelschunk   = calc_layer_average(filteredthetaeschunk,pbltopchunk,lfttopchunk)
             wbchunk,wlchunk = calc_weights(pschunk,pbltopchunk,lfttopchunk)
             del pschunk,pbltopchunk,lfttopchunk,filteredthetaechunk,filteredthetaeschunk
-            logger.info('   Calculating BL terms...')
+            logger.info('   Calculating BL terms')
             capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelschunk,wbchunk,wlchunk)
             del wbchunk,wlchunk,thetaebchunk,thetaelchunk,thetaelschunk
-            logger.info('   Appending chunk results...')
+            logger.info('   Appending chunk results')
             results['t'].append(filteredtchunk)
             results['q'].append(filteredqchunk)
             results['capeprofile'].append(capeprofilechunk)
