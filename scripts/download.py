@@ -29,7 +29,7 @@ LATRANGE  = (5.,25.)
 LONRANGE  = (60.,90.)
 LEVRANGE  = (500.,1000.)
 
-def get_era5():
+def import_era5():
     '''
     Purpose: Access ERA5 data stored on Google Cloud Storage and return it as an xarray.Dataset.
     Returns: 
@@ -44,7 +44,7 @@ def get_era5():
         logger.error(f'   Failed to fetch ERA5: {str(e)}')
         return None
 
-def get_imerg():
+def import_imerg():
     '''
     Purpose: Access IMERG V06 data stored on Microsoft Planetary Computer and return it as an xarray.Dataset.
     Returns: 
@@ -94,9 +94,9 @@ def subset(da,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levr
     - da (xarray.DataArray): input DataArray
     - years (list): list of years to include (defaults to YEARS)
     - months (list): list of months to include (defaults to MONTHS)
-    - latrange (tuple): minimum and maximum latitude (defaults to LATRANGE)
-    - lonrange (tuple): minimum and maximum longitude (defaults to LONRANGE)
-    - levrange (tuple): minimum and maximum pressure levels (defaults to LEVRANGE)    
+    - latrange (float, float): minimum and maximum latitudes to include (defaults to LATRANGE)
+    - lonrange (float, float): minimum and maximum longitudes to include (defaults to LONRANGE)
+    - levrange (float, float): minimum and maximum pressure levels to include (defaults to LEVRANGE)   
     Returns:
     - xarray.DataArray: subsetted DataArray
     '''    
@@ -117,7 +117,7 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     - author (str): author name (defaults to AUTHOR)
     - email (str): author email (defaults to EMAIL)    
     Returns:
-    - xarray.Dataset: formatted Dataset
+    - xarray.Dataset: Dataset with personalized metadata
     '''    
     ds = xr.Dataset(data_vars={shortname:([*da.dims],da.data)},coords={dim:da.coords[dim].data for dim in da.dims})
     ds[shortname].attrs = dict(long_name=longname,units=units)
@@ -140,9 +140,9 @@ def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRA
     - units (str): variable units
     - years (list): list of years to include (defaults to YEARS)
     - months (list): list of months to include (defaults to MONTHS)
-    - latrange (tuple): minimum and maximum latitude (defaults to LATRANGE)
-    - lonrange (tuple): minimum and maximum longitude (defaults to LONRANGE)
-    - levrange (tuple): minimum and maximum pressure levels (defaults to LEVRANGE)
+    - latrange (float, float): minimum and maximum latitudes to include (defaults to LATRANGE)
+    - lonrange (float, float): minimum and maximum longitudes to include (defaults to LONRANGE)
+    - levrange (float, float): minimum and maximum pressure levels to include (defaults to LEVRANGE)
     - author (str): author name (defaults to AUTHOR)
     - email (str): author email (defaults to EMAIL)
     Returns:
@@ -169,33 +169,34 @@ def save(ds,savedir=SAVEDIR):
     logger.info(f'Attempting to save {filename}...')   
     try:
         ds.to_netcdf(filepath,format='NETCDF4',engine='h5netcdf')
-        logger.info(f'   File writing successful: {filename}')
+        logger.info(f'   File writing successful')
         with xr.open_dataset(filepath) as test:
             pass
-        logger.info(f'   File verification successful: {filename}')
+        logger.info(f'   File verification successful')
         return True
     except Exception as e:
-        logger.error(f'   Failed to save or verify {filename}: {e}')
+        logger.error(f'   Failed to save or verify: {e}')
         return False
 
 if __name__=='__main__':
     try:
         logger.info('Fetching ERA5 and IMERG data...')
-        era5  = get_era5()
-        imerg = get_imerg()
+        era5  = import_era5()
+        imerg = import_imerg()
         logger.info('Extracting variable data...')
         prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24
         psdata = era5.surface_pressure/100
         tdata  = era5.temperature
         qdata  = era5.specific_humidity
         del era5,imerg
-        logger.info('Processing and saving variables...')
+        logger.info('Creating datasets...')
         dslist = [
             process(prdata,'pr','IMERG V06 precipitation rate','mm/day'),
             process(psdata,'ps','ERA5 surface pressure','hPa'),
             process(tdata,'t','ERA5 air temperature','K'),
             process(qdata,'q','ERA5 specific humidity','kg/kg')]
         del prdata,psdata,tdata,qdata
+        logger.info('Saving datasets...')
         for ds in dslist:
             save(ds)
             del ds

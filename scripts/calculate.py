@@ -17,9 +17,8 @@ AUTHOR    = 'Savannah L. Ferretti'
 EMAIL     = 'savannah.ferretti@uci.edu' 
 FILEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
 SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
-CHUNKSIZE = 21
 
-def get_data(filename,filedir=FILEDIR):
+def import_data(filename,filedir=FILEDIR):
     '''
     Purpose: Import a NetCDF file as an xarray.DataArray and check level ordering (if applicable).
     Args:
@@ -47,21 +46,20 @@ def get_p_array(da):
     p = da.lev.expand_dims({'time':da.time,'lat':da.lat,'lon':da.lon}).transpose('lev','time','lat','lon')
     return p
 
-def regrid_and_resample(da,gridtarget,frequency='H',method='first'):
+def regrid_and_resample(da,gridtarget,frequency='h'):
     '''
-    Purpose: Regrid and resample a DataArray.
+    Purpose: Regrid and resample an xarray.DataArray.
     Args:
     - da (xarray.DataArray): input DataArray
     - gridtarget (xarray.DataArray): DataArray that contains the target grid for regridding
-    - frequency (str): resampling frequency (defaults to 'H' for hourly)
-    - method (str): resampling method (defaults to 'first')
+    - frequency (str): resampling frequency (defaults to 'h' for hourly)
     Returns:
     - xarray.DataArray: regridded and resampled DataArray
     '''
     regridder = xesmf.Regridder(da,gridtarget,method='bilinear')
     da = regridder(da,keep_attrs=True)
     da.coords['time'] = da.time.dt.floor(frequency) 
-    da = da.groupby('time').mean()
+    da = da.groupby('time').first()
     return da
     
 def calc_es(t):
@@ -104,13 +102,10 @@ def calc_thetae(p,t,q=None,ps=None):
     - t (xarray.DataArray): temperature DataArray (K)
     - q (xarray.DataArray, optional): specific humidity DataArray (kg/kg); if None, saturated θₑ will be calculated
     - ps (xarray.DataArray, optional): surface pressure DataArray (hPa); if given, θₑ at the surface will be calculated
+                                       (values > 1,000 hPa are clamped to 1000 hPa to avoid interpolation errors)
     Returns:
     - xarray.DataArray: (regular, surface, or saturated) equivalent potential temperature DataArray (K)
     '''
-    p0 = 1000.  
-    rv = 461.5  
-    rd = 287.04
-    epsilon = rd/rv
     if q is None:
         q = calc_qs(p,t)
     if ps is not None:
@@ -118,11 +113,12 @@ def calc_thetae(p,t,q=None,ps=None):
         t = t.interp(lev=psclamped)
         q = q.interp(lev=psclamped)
         p = psclamped
-        pvalues = psclamped
-    else:
-        pvalues = p.lev
+    p0 = 1000.  
+    rv = 461.5  
+    rd = 287.04
+    epsilon = rd/rv
     r  = q/(1.-q) 
-    e  = (pvalues*r)/(epsilon+r)
+    e  = (p*r)/(epsilon+r)
     tl = 2840./(3.5*np.log(t)-np.log(e)-4.805)+55.
     thetae = t*(p0/p)**(0.2854*(1.-0.28*r))*np.exp((3.376/tl-0.00254)*1000.*r*(1.+0.81*r))
     return thetae 
@@ -139,80 +135,79 @@ def filter_above_surface(da,ps):
     da = xr.where(da.lev<=ps,da,np.nan)
     return da
 
-def get_adjacent_pressure(pref,levs,side,direction):
+def get_level_above(ptarget,levels,side):
     '''
-    Purpose: Find the pressure level immediately above or below a given pressure.
+    Purpose: Find the pressure level immediately above a target pressure. With ascending pressure levels, 'above' means 
+             lower pressure/higher altitude.
     Args:
-    - pref (xr.DataArray): DataArray of reference pressures (hPa)
-    - levs (np.ndarray): 1D Array of pressure levels (hPa)
-    - side (str): 'left' or 'right' for numpy.searchsorted
-    - direction (str): 'above' or 'below' to specify which adjacent level to find
+    - ptarget (xarray.DataArray): DataArray of target pressures
+    - levels (numpy.ndarray): 1D array of pressure levels in ascending order
+    - side (str): 'left' or 'right' for numpy.searchsorted tie-breaking
     Returns:
-    - xr.DataArray: DataArray of pressure levels immediately above or below 'pref'
+    - xarray.DataArray: DataArray of pressure levels immediately above 'ptarget'
     '''
-    if direction=='above':
-        return xr.apply_ufunc(lambda x:levs[np.maximum(np.searchsorted(levs,x,side=side)-1,0)],pref)
-    elif direction=='below':
-        return xr.apply_ufunc(lambda x:levs[np.minimum(np.searchsorted(levs,x,side=side),len(levs)-1)],pref)
-    else:
-        raise ValueError("Direction must be either 'above' or 'below'")
+    searchidx = np.searchsorted(levels,ptarget,side=side)
+    levabove  = levels[np.maximum(searchidx-1,0)]
+    return levabove
 
-def integrate_partial_layer(pref,pabove,pbelow,daabove,dabelow,bound):
+def get_level_below(ptarget,levels,side):
     '''
-    Purpose: Integrate over a partial layer, including correction for edge cases.
+    Purpose: Find the pressure level immediately below a target pressure. With ascending pressure levels, 'below' means 
+             higher pressure/lower altitude.
     Args:
-    - pref (xr.DataArray): DataArray of reference pressures for integration (hPa)
-    - pabove (xr.DataArray): DataArray of pressure levels above 'pref' (hPa)
-    - pbelow (xr.DataArray): DataArray of pressure levels above 'pref' (hPa)
-    - daabove (xr.DataArray): DataArray of values to integrate at 'pabove'
-    - dabelow (xr.DataArray): DataArray of values to integrate at 'pbelow'
-    - bound (bool): 'lower' or 'upper' to specify which correction to apply
+    - ptarget (xarray.DataArray): DataArray of target pressures
+    - levels (numpy.ndarray): 1D array of pressure levels in ascending order
+    - side (str): 'left' or 'right' for numpy.searchsorted tie-breaking
     Returns:
-    - xr.DataArray: DataArray of values integrated over the partial layer
+    - xarray.DataArray: DataArray of pressure levels immediately below 'ptarget'
     '''
-    dp = pbelow-pabove
-    dp = xr.where(dp==0,1e-8,dp)
-    if bound=='upper':
-        correction = -daabove/2*dp*(pref<pabove.min())
-        integral   = (pref-pabove)*daabove+(dabelow-daabove)*(pref-pabove)**2/(2*dp)+correction
-        return integral
-    elif bound=='lower':
-        correction = -dabelow/2*dp*(pref>pbelow.max())
-        integral   = (pbelow-pref)*daabove+(dabelow-daabove)*dp*(1-((pref-pabove)/dp)**2)/2+correction
-        return integral
-    else:
-        raise ValueError("Bound must be either 'upper' or 'lower'")
+    searchidx = np.searchsorted(levels,ptarget,side=side)
+    levbelow  = levels[np.minimum(searchidx,len(levels)-1)]
+    return levbelow
 
-def calc_layer_average(da,upperbound,lowerbound):
+def calc_layer_average(da,a,b):
     '''
-    Purpose: Calculate vertical average of an xarray.DataArray between two pressure levels.
+    Purpose: Calculate pressure-weighted vertical average of an xarray.DataArray between two levels ('a' and 'b'). 
+             Expects 'a' > 'b' since we integrate from higher to lower pressure.
     Args:
-    - da (xr.DataArray): input DataArray with 'lev' coordinate
-    - upperbound (xr.DataArray): DataArray of upper pressure level bound (hPa)
-    - lowerbound (xr.DataArray): DataArray of lower pressure level bound (hPa)
+    - da (xarray.DataArray): input DataArray with 'lev' coordinate
+    - a (xarray.DataArray): DataArray of bottom boundary pressures (higher, lower altitude)
+    - b (xarray.DataArray): DataArray of top boundary pressures (lower, higher altitude)
     Returns:
-    - xr.DataArray: layer-averaged DataArray
+    - xarray.DataArray: layer-averaged DataArray
     '''
-    da,upperbound,lowerbound = da.load(),upperbound.load(),lowerbound.load()
-    paboveupper   = get_adjacent_pressure(upperbound,np.array(da.lev),'right','above')
-    pbelowupper   = get_adjacent_pressure(upperbound,np.array(da.lev),'right','below')
-    upperintegral = integrate_partial_layer(upperbound,paboveupper,pbelowupper,da.sel(lev=paboveupper),da.sel(lev=pbelowupper),bound='upper')
-    pabovelower   = get_adjacent_pressure(lowerbound,np.array(da.lev),'left','above')
-    pbelowlower   = get_adjacent_pressure(lowerbound,np.array(da.lev),'left','below')
-    lowerintegral = integrate_partial_layer(lowerbound,pabovelower,pbelowlower,da.sel(lev=pabovelower),da.sel(lev=pbelowlower),bound='lower')
-    innerintegral = (da*(da.lev<=upperbound)*(da.lev>=lowerbound)).integrate('lev')
-    layeraverage  = (upperintegral+innerintegral-lowerintegral)/(upperbound-lowerbound)
+    da = da.load()
+    a  = a.load()
+    b  = b.load()
+    levabove = xr.apply_ufunc(get_level_above,a,kwargs={'levels':np.array(da.lev),'side':'right'})
+    levbelow = xr.apply_ufunc(get_level_below,a,kwargs={'levels':np.array(da.lev),'side':'right'})
+    valueabove = da.sel(lev=levabove)
+    valuebelow = da.sel(lev=levbelow)
+    correction = -valueabove/2*(levbelow-levabove)*(a<da.lev[-1])
+    levbelow   = levbelow+(levbelow==levabove)
+    lowerintegral = (a-levabove)*valueabove+(valuebelow-valueabove)*(a-levabove)**2/(levbelow-levabove)/2+correction
+    lowerintegral = lowerintegral.fillna(0)
+    innerintegral = (da*(da.lev<=a)*(da.lev>=b)).fillna(0).integrate('lev')
+    levabove = xr.apply_ufunc(get_level_above,b,kwargs={'levels':np.array(da.lev),'side':'left'})
+    levbelow = xr.apply_ufunc(get_level_below,b,kwargs={'levels':np.array(da.lev),'side':'left'})
+    valueabove = da.sel(lev=levabove)
+    valuebelow = da.sel(lev=levbelow)
+    correction = -valuebelow/2*(levbelow-levabove)*(b>da.lev[0])
+    levabove   = levabove-(levbelow==levabove)
+    upperintegral = (levbelow-b)*valueabove+(valuebelow-valueabove)*(levbelow-levabove)*(1-((b-levabove)/(levbelow-levabove))**2)/2+correction
+    upperintegral = upperintegral.fillna(0)  
+    layeraverage  = (lowerintegral+innerintegral+upperintegral)/(a-b)
     return layeraverage
     
 def calc_weights(ps,pbltop,lfttop):
     '''
     Purpose: Calculate weights for the boundary layer (PBL) and lower free troposphere (LFT) following Adames AF et al. 2021. J. Atmos. Sci.
     Args:
-    - ps (xr.DataArray): surface pressure DataArray (hPa)
-    - pbltop (xr.DataArray): DataArray of pressures at the top of the PBL (hPa)
-    - lfttop (xr.DataArray): DataArray of pressures at the top of the LFT (hPa)
+    - ps (xarray.DataArray): surface pressure DataArray (hPa)
+    - pbltop (xarray.DataArray): DataArray of pressures at the top of the PBL (hPa)
+    - lfttop (xarray.DataArray): DataArray of pressures at the top of the LFT (hPa)
     Returns:
-    - tuple (wb, wl): DataArrays of PBL weights and LFT weights
+    - (xarray.DataArray, xarray.DataArray): PBL and LFT weights
     '''
     pblthickness = ps-pbltop
     lftthickness = pbltop-lfttop
@@ -222,15 +217,15 @@ def calc_weights(ps,pbltop,lfttop):
 
 def calc_bl_terms(thetaeb,thetael,thetaels,wb,wl):
     '''
-    Purpose: Calculate BL, CAPEL, sand SUBSATL following Eq. 1 from: Ahmed F et al. 2021. Geophys. Res. Lett.
+    Purpose: Calculate BL, CAPEL, and SUBSATL following Eq. 1 from: Ahmed F et al. 2021. Geophys. Res. Lett.
     Args:
-    - thetaeb (xr.DataArray): DataArray of equivalent potential temperature averaged over the PBL
-    - thetael (xr.DataArray): DataArray of equivalent potential temperature averaged over the LFT
-    - thetaels (xr.DataArray): DataArray of saturated equivalent potential temperature averaged over the LFT
-    - wb (xr.DataArray): DataArray of weights for the PBL
-    - wl (xr.DataArray): DataArray of weights for the LFT
+    - thetaeb (xarray.DataArray): DataArray of equivalent potential temperature averaged over the PBL
+    - thetael (xarray.DataArray): DataArray of equivalent potential temperature averaged over the LFT
+    - thetaels (xarray.DataArray): DataArray of saturated equivalent potential temperature averaged over the LFT
+    - wb (xarray.DataArray): DataArray of weights for the PBL
+    - wl (xarray.DataArray): DataArray of weights for the LFT
     Returns:
-    - tuple (cape, subsat, bl): DataArrays of CAPEL, SUBSATL, and BL
+    - (xarray.DataArray, xarray.DataArray, xarray.DataArray): CAPEL, SUBSATL, and BL DataArrays
     '''
     g       = 9.81
     kappal  = 3.
@@ -282,28 +277,29 @@ def save(ds,savedir=SAVEDIR):
     logger.info(f'Attempting to save {filename}...')   
     try:
         ds.to_netcdf(filepath,format='NETCDF4',engine='h5netcdf')
-        logger.info(f'   File writing successful: {filename}')
+        logger.info(f'   File writing successful')
         with xr.open_dataset(filepath) as test:
             pass
-        logger.info(f'   File verification successful: {filename}')
+        logger.info(f'   File verification successful')
         return True
     except Exception as e:
-        logger.error(f'   Failed to save or verify {filename}: {e}')
+        logger.error(f'   Failed to save or verify: {e}')
         return False
-        
+
 if __name__=='__main__':
     try:
         logger.info('Importing all raw variables...')        
-        pr = get_data('IMERG_V06_precipitation_rate.nc')
-        ps = get_data('ERA5_surface_pressure.nc')
-        t  = get_data('ERA5_air_temperature.nc')
-        q  = get_data('ERA5_specific_humidity.nc')
+        pr = import_data('IMERG_V06_precipitation_rate.nc')
+        ps = import_data('ERA5_surface_pressure.nc')
+        t  = import_data('ERA5_air_temperature.nc')
+        q  = import_data('ERA5_specific_humidity.nc')
         logger.info('Resampling/regridding precipitation...')
         resampledpr = regrid_and_resample(pr.load(),ps.load())
         del pr
         logger.info('Beginning chunking...')
-        timechunks   = np.array_split(np.arange(len(ps.time)),CHUNKSIZE)
-        results = {
+        nyears     = len(np.unique(ps.time.dt.year.values))
+        timechunks = np.array_split(np.arange(len(ps.time)),nyears)
+        results    = {
             't':[],
             'q':[],
             'capeprofile':[],
@@ -327,19 +323,19 @@ if __name__=='__main__':
             filteredqchunk = filter_above_surface(qchunk,pschunk)
             filteredthetaechunk  = filter_above_surface(thetaechunk,pschunk)
             filteredthetaeschunk = filter_above_surface(thetaeschunk,pschunk)
-            del tchunk,qchunk,thetaechunk,thetaeschunk            
+            del tchunk,qchunk           
             logger.info('   Calculating CAPE-like and SUBSAT-like profiles')    
             capeprofilechunk   = thetaesurfchunk-filteredthetaeschunk
             subsatprofilechunk = filteredthetaeschunk-filteredthetaechunk
-            del thetaesurfchunk
+            del thetaesurfchunk,filteredthetaechunk,filteredthetaeschunk
             logger.info('   Calculating layer averages')
             pbltopchunk = pschunk-100.
-            lfttopchunk = xr.full_like(pschunk,500.) 
-            thetaebchunk    = calc_layer_average(filteredthetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
-            thetaelchunk    = calc_layer_average(filteredthetaechunk,pbltopchunk,lfttopchunk)
-            thetaelschunk   = calc_layer_average(filteredthetaeschunk,pbltopchunk,lfttopchunk)
+            lfttopchunk = xr.full_like(pschunk,500.)
+            thetaebchunk    = calc_layer_average(thetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
+            thetaelchunk    = calc_layer_average(thetaechunk,pbltopchunk,lfttopchunk)
+            thetaelschunk   = calc_layer_average(thetaeschunk,pbltopchunk,lfttopchunk)
             wbchunk,wlchunk = calc_weights(pschunk,pbltopchunk,lfttopchunk)
-            del pschunk,pbltopchunk,lfttopchunk,filteredthetaechunk,filteredthetaeschunk
+            del pschunk,pbltopchunk,lfttopchunk,thetaechunk,thetaeschunk
             logger.info('   Calculating BL terms')
             capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelschunk,wbchunk,wlchunk)
             del wbchunk,wlchunk,thetaebchunk,thetaelchunk,thetaelschunk
