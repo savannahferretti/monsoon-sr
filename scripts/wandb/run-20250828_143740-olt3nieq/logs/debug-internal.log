@@ -1,0 +1,13 @@
+{"time":"2025-08-28T14:37:40.635257238-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-08-28T14:37:40.980514052-07:00","level":"INFO","msg":"stream: created new stream","id":"olt3nieq"}
+{"time":"2025-08-28T14:37:40.981793615-07:00","level":"INFO","msg":"stream: started","id":"olt3nieq"}
+{"time":"2025-08-28T14:37:40.981801842-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"olt3nieq"}
+{"time":"2025-08-28T14:37:40.981806891-07:00","level":"INFO","msg":"sender: started","stream_id":"olt3nieq"}
+{"time":"2025-08-28T14:37:40.98181665-07:00","level":"INFO","msg":"handler: started","stream_id":"olt3nieq"}
+{"time":"2025-08-28T15:06:08.284266983-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-28T15:06:08.568666671-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-08-28T15:06:08.582005621-07:00","level":"INFO","msg":"stream: closing","id":"olt3nieq"}
+{"time":"2025-08-28T15:06:08.583356283-07:00","level":"INFO","msg":"handler: closed","stream_id":"olt3nieq"}
+{"time":"2025-08-28T15:06:08.583367053-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"olt3nieq"}
+{"time":"2025-08-28T15:06:08.583389567-07:00","level":"INFO","msg":"sender: closed","stream_id":"olt3nieq"}
+{"time":"2025-08-28T15:06:08.599085854-07:00","level":"INFO","msg":"stream: closed","id":"olt3nieq"}

@@ -1,0 +1,8 @@
+{"time":"2025-08-28T07:25:49.560429851-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-08-28T07:25:49.8445226-07:00","level":"INFO","msg":"stream: created new stream","id":"s3do6sew"}
+{"time":"2025-08-28T07:25:49.84477614-07:00","level":"INFO","msg":"stream: started","id":"s3do6sew"}
+{"time":"2025-08-28T07:25:49.844813913-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"s3do6sew"}
+{"time":"2025-08-28T07:25:49.844832509-07:00","level":"INFO","msg":"sender: started","stream_id":"s3do6sew"}
+{"time":"2025-08-28T07:25:49.844839523-07:00","level":"INFO","msg":"handler: started","stream_id":"s3do6sew"}
+{"time":"2025-08-28T07:31:20.766983825-07:00","level":"ERROR","msg":"HTTP error","status":404,"method":"POST","url":"https://api.wandb.ai/files/savannah-research/NNs/s3do6sew/file_stream"}
+{"time":"2025-08-28T07:31:20.768071748-07:00","level":"ERROR+4","msg":"filestream: fatal error: filestream: failed to upload: 404 Not Found path=files/savannah-research/NNs/s3do6sew/file_stream: {\"error\":\"run NNs/s3do6sew not found while streaming file\"}"}

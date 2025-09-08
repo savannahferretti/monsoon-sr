@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-FILEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
+FILEPATH = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed/data.h5'
 SAVEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/results'
 CONFIGS  = [
     {'name':'bw_0.1','binwidth':0.1,'description':'Binwidth = 0.1 m/s²'},
@@ -42,8 +42,8 @@ class PODMODEL:
         '''
         Purpose: Train a POD model by computing average precipitation in each BL bin.
         Args:
-        - Xtrain (numpy.ndarray): training input BL values
-        - ytrain (numpy.ndarray): training target precipitation values
+        - Xtrain (numpy.ndarray): training BL values
+        - ytrain (numpy.ndarray): training precipitation values
         '''  
         idxs   = np.digitize(Xtrain,self.binedges)-1
         counts = np.zeros(self.nbins)
@@ -55,70 +55,97 @@ class PODMODEL:
                 counts[idx] += 1
                 sums[idx]   += yvalue
         with np.errstate(divide='ignore',invalid='ignore'):
-            self.binmeans = np.where(counts>=self.samplethresh,sums/counts,np.nan)
+            means = sums/counts
+            self.binmeans = np.where(counts>=self.samplethresh,means,np.nan)
 
     def predict(self,X):
         '''
-        Purpose: Generate precipitation predictions using the bin averages.
+        Purpose: Generate precipitation predictions from BL values using learned bin means.
         Args:
-        - X (numpy.ndarray): input values for prediction
+        - X (numpy.ndarray): BL values for prediction
         Returns:
-        - numpy.ndarray: predicted precipitation values, with non-negative constraint enforced
+        - numpy.ndarray: predicted precipitation values (non-negative constraint enforced)
         '''
         binidxs = np.clip(np.digitize(X,self.binedges)-1,0,self.nbins-1)
-        ypred   = np.maximum((self.binmeans[binidxs]),0)
+        ypred   = self.binmeans[binidxs]
+        ypred   = np.maximum(ypred,0)
         return ypred
 
-def load(filename,filedir=FILEDIR):
+def load(filepath=FILEPATH):
     '''
-    Purpose: Load POD data splits from an HDF5 file.
+    Purpose: Load data splits from an HDF5 file, combining training and validation sets for training.
     Args:
-    - filename (str): name of the HDF5 file
-    - filedir (str): directory containing the HDF5 file (defaults to FILEDIR)
+    - filepath (str): path to HDF5 file produced by split.py (defaults to FILEPATH)
     Returns:
-    - (numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray): BL and precipitation arrays organized by data split
+    - tuple[numpy.ndarray,numpy.ndarray,numpy.ndarray,numpy.ndarray]: 1D BL and precipitation training/test arrays
     '''
-    filepath = os.path.join(filedir,filename)
     with h5py.File(filepath,'r') as f:
-        Xtrain = f['bl_train'][:]
-        Xtest  = f['bl_test'][:]
-        ytrain = f['pr_train'][:]
-        ytest  = f['pr_test'][:]
+        Xtrainarray = np.concatenate([f['bl_train'][:],f['bl_valid'][:]],axis=0)
+        Xtestarray  = f['bl_test'][:]
+        ytrainarray = np.concatenate([f['pr_train'][:],f['pr_valid'][:]],axis=0)
+        ytestarray  = f['pr_test'][:]
+        Xtrain = Xtrainarray.squeeze().astype(np.float32)
+        Xtest  = Xtestarray.squeeze().astype(np.float32)
+        ytrain = ytrainarray.squeeze().astype(np.float32)
+        ytest  = ytestarray.squeeze().astype(np.float32)
     return Xtrain,Xtest,ytrain,ytest
-
-def process(filename,configs=CONFIGS):
+        
+def process(configs=CONFIGS,filepath=FILEPATH):
     '''
     Purpose: Train and evaluate POD models with multiple bin width configurations.
     Args:
-    - filename (str): name of the HDF5 file
-    - configs (list): model configurations specifying bin widths and descriptions (defaults to CONFIGS)
+    - configs (list[dict[str,object]]): model configurations specifying bin widths and descriptions (defaults to CONFIGS)
+    - filepath (str): path to HDF5 file produced by split.py
     Returns:
-    - dict: dictionary containing POD model results
+    - dict[str,dict[str,object]]: mapping from configuration name to POD results
     '''
-    Xtrain,Xtest,ytrain,ytest = load(filename)
+    Xtrain,Xtest,ytrain,ytest = load(filepath)
     results = {}
     for config in configs:
         name        = config['name']
         binwidth    = config['binwidth']
         description = config['description']
-        logger.info(f'   Running {name}')
+        logger.info(f'   Running {description}')
         model = PODMODEL(binwidth)
         model.fit(Xtrain,ytrain)
         results[name] = {
             'description':description,
+            'bin_width':model.binwidth,
             'bin_centers':model.bincenters,
             'bin_means':model.binmeans,
             'n_params':np.sum(~np.isnan(model.binmeans)),
             'y_pred':model.predict(Xtest)}
     return results
 
+def save(results,filename='pod_results.pkl',savedir=SAVEDIR):
+    '''
+    Purpose: Save POD model results to a pickle file in the specified directory, then verify the write by reopening.
+    Args:
+    - results (dict[str,dict[str,object]]): POD model results to save
+    - filename (str): output file name (defaults to 'pod_results.pkl')
+    - savedir (str): output directory (defaults to SAVEDIR)
+    Returns:
+    - bool: True if write and verification succeed, otherwise False
+    '''
+    try:
+        filepath = os.path.join(savedir,filename)
+        logger.info(f'Attempting to save results to {filepath}...')
+        with open(filepath,'wb') as f:
+            pickle.dump(results,f,protocol=pickle.HIGHEST_PROTOCOL)
+        with open(filepath,'rb') as f:
+            _ = pickle.load(f)
+        logger.info('   File write successful')
+        return True
+    except Exception:
+        logger.exception('   Failed to save or verify')
+        return False
+
 if __name__=='__main__':
     try:
         logger.info('Training POD models...')
-        results = process('pod_data_subset.h5')
+        results = process()
         logger.info('Saving results...')
-        with open(f'{SAVEDIR}/pod_subset_results.pkl','wb') as f:
-            pickle.dump(results,f)
+        save(results)
         del results
         logger.info('Script execution completed successfully!')
     except Exception as e:

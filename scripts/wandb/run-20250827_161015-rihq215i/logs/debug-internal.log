@@ -1,0 +1,13 @@
+{"time":"2025-08-27T16:10:16.275222988-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-08-27T16:10:16.559924546-07:00","level":"INFO","msg":"stream: created new stream","id":"rihq215i"}
+{"time":"2025-08-27T16:10:16.56032415-07:00","level":"INFO","msg":"stream: started","id":"rihq215i"}
+{"time":"2025-08-27T16:10:16.560349328-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"rihq215i"}
+{"time":"2025-08-27T16:10:16.560377573-07:00","level":"INFO","msg":"handler: started","stream_id":"rihq215i"}
+{"time":"2025-08-27T16:10:16.560400848-07:00","level":"INFO","msg":"sender: started","stream_id":"rihq215i"}
+{"time":"2025-08-27T16:20:27.550431994-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-27T16:20:27.799680737-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-08-27T16:20:27.870706752-07:00","level":"INFO","msg":"stream: closing","id":"rihq215i"}
+{"time":"2025-08-27T16:20:27.870971695-07:00","level":"INFO","msg":"handler: closed","stream_id":"rihq215i"}
+{"time":"2025-08-27T16:20:27.8710001-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"rihq215i"}
+{"time":"2025-08-27T16:20:27.871025699-07:00","level":"INFO","msg":"sender: closed","stream_id":"rihq215i"}
+{"time":"2025-08-27T16:20:27.873736064-07:00","level":"INFO","msg":"stream: closed","id":"rihq215i"}

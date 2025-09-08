@@ -1,0 +1,14 @@
+{"time":"2025-08-28T08:43:16.871105927-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-08-28T08:43:17.130528462-07:00","level":"INFO","msg":"stream: created new stream","id":"5ms2b3o0"}
+{"time":"2025-08-28T08:43:17.130717637-07:00","level":"INFO","msg":"stream: started","id":"5ms2b3o0"}
+{"time":"2025-08-28T08:43:17.130740231-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"5ms2b3o0"}
+{"time":"2025-08-28T08:43:17.13075012-07:00","level":"INFO","msg":"handler: started","stream_id":"5ms2b3o0"}
+{"time":"2025-08-28T08:43:17.130759218-07:00","level":"INFO","msg":"sender: started","stream_id":"5ms2b3o0"}
+{"time":"2025-08-28T08:56:32.947855887-07:00","level":"INFO","msg":"api: retrying HTTP error","status":502,"url":"https://api.wandb.ai/files/savannah-research/NNs/5ms2b3o0/file_stream","body":"\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>502 Server Error</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Server Error</h1>\n<h2>The server encountered a temporary error and could not complete your request.<p>Please try again in 30 seconds.</h2>\n<h2></h2>\n</body></html>\n"}
+{"time":"2025-08-28T09:11:27.972193608-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-28T09:11:28.157334656-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-08-28T09:11:28.171323099-07:00","level":"INFO","msg":"stream: closing","id":"5ms2b3o0"}
+{"time":"2025-08-28T09:11:28.17159258-07:00","level":"INFO","msg":"handler: closed","stream_id":"5ms2b3o0"}
+{"time":"2025-08-28T09:11:28.171611547-07:00","level":"INFO","msg":"sender: closed","stream_id":"5ms2b3o0"}
+{"time":"2025-08-28T09:11:28.17160315-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"5ms2b3o0"}
+{"time":"2025-08-28T09:11:28.174476379-07:00","level":"INFO","msg":"stream: closed","id":"5ms2b3o0"}

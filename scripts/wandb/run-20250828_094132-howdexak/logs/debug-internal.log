@@ -1,0 +1,13 @@
+{"time":"2025-08-28T09:41:32.61356504-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-08-28T09:41:32.879679294-07:00","level":"INFO","msg":"stream: created new stream","id":"howdexak"}
+{"time":"2025-08-28T09:41:32.879927484-07:00","level":"INFO","msg":"stream: started","id":"howdexak"}
+{"time":"2025-08-28T09:41:32.879937343-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"howdexak"}
+{"time":"2025-08-28T09:41:32.879953795-07:00","level":"INFO","msg":"handler: started","stream_id":"howdexak"}
+{"time":"2025-08-28T09:41:32.879960729-07:00","level":"INFO","msg":"sender: started","stream_id":"howdexak"}
+{"time":"2025-08-28T10:10:12.135323502-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-08-28T10:10:12.358145296-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-08-28T10:10:12.365728215-07:00","level":"INFO","msg":"stream: closing","id":"howdexak"}
+{"time":"2025-08-28T10:10:12.366047031-07:00","level":"INFO","msg":"handler: closed","stream_id":"howdexak"}
+{"time":"2025-08-28T10:10:12.36607759-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"howdexak"}
+{"time":"2025-08-28T10:10:12.366098411-07:00","level":"INFO","msg":"sender: closed","stream_id":"howdexak"}
+{"time":"2025-08-28T10:10:12.394879575-07:00","level":"INFO","msg":"stream: closed","id":"howdexak"}

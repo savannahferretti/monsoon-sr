@@ -1,0 +1,28 @@
+2025-08-27 10:30:54,645 INFO    MainThread:844297 [wandb_setup.py:_flush():80] Current SDK version is 0.21.0
+2025-08-27 10:30:54,647 INFO    MainThread:844297 [wandb_setup.py:_flush():80] Configure stats pid to 844297
+2025-08-27 10:30:54,647 INFO    MainThread:844297 [wandb_setup.py:_flush():80] Loading settings from /global/homes/s/sferrett/.config/wandb/settings
+2025-08-27 10:30:54,648 INFO    MainThread:844297 [wandb_setup.py:_flush():80] Loading settings from /global/cfs/cdirs/m4334/sferrett/monsoon-sr/scripts/wandb/settings
+2025-08-27 10:30:54,648 INFO    MainThread:844297 [wandb_setup.py:_flush():80] Loading settings from environment variables
+2025-08-27 10:30:54,655 INFO    MainThread:844297 [wandb_init.py:setup_run_log_directory():703] Logging user logs to /global/cfs/cdirs/m4334/sferrett/monsoon-sr/scripts/wandb/run-20250827_103053-107ezjt8/logs/debug.log
+2025-08-27 10:30:54,659 INFO    MainThread:844297 [wandb_init.py:setup_run_log_directory():704] Logging internal logs to /global/cfs/cdirs/m4334/sferrett/monsoon-sr/scripts/wandb/run-20250827_103053-107ezjt8/logs/debug-internal.log
+2025-08-27 10:30:54,660 INFO    MainThread:844297 [wandb_init.py:init():830] calling init triggers
+2025-08-27 10:30:54,660 INFO    MainThread:844297 [wandb_init.py:init():835] wandb.init called with sweep_config: {}
+config: {'name': 'exp_1', 'input_variables': ['bl'], 'loss_function': 'L1Loss', 'n_params': 44737, 'batch_size': 64000, 'patience': 3, '_wandb': {}}
+2025-08-27 10:30:54,660 INFO    MainThread:844297 [wandb_init.py:init():871] starting backend
+2025-08-27 10:30:55,578 INFO    MainThread:844297 [wandb_init.py:init():874] sending inform_init request
+2025-08-27 10:30:55,744 INFO    MainThread:844297 [wandb_init.py:init():882] backend started and connected
+2025-08-27 10:30:55,745 INFO    MainThread:844297 [wandb_init.py:init():953] updated telemetry
+2025-08-27 10:30:56,657 INFO    MainThread:844297 [wandb_init.py:init():977] communicating run to backend with 90.0 second timeout
+2025-08-27 10:31:02,095 INFO    MainThread:844297 [wandb_init.py:init():1029] starting run threads in backend
+2025-08-27 10:31:11,647 INFO    MainThread:844297 [wandb_run.py:_console_start():2458] atexit reg
+2025-08-27 10:31:11,648 INFO    MainThread:844297 [wandb_run.py:_redirect():2306] redirect: wrap_raw
+2025-08-27 10:31:11,648 INFO    MainThread:844297 [wandb_run.py:_redirect():2375] Wrapping output streams.
+2025-08-27 10:31:11,648 INFO    MainThread:844297 [wandb_run.py:_redirect():2398] Redirects installed.
+2025-08-27 10:31:11,815 INFO    MainThread:844297 [wandb_init.py:init():1075] run started, returning control to user process
+2025-08-27 10:47:36,960 INFO    MainThread:844297 [wandb_run.py:_finish():2224] finishing run savannah-research/Standard NNs/107ezjt8
+2025-08-27 10:47:36,961 INFO    MainThread:844297 [wandb_run.py:_atexit_cleanup():2423] got exitcode: 0
+2025-08-27 10:47:36,962 INFO    MainThread:844297 [wandb_run.py:_restore():2405] restore
+2025-08-27 10:47:36,962 INFO    MainThread:844297 [wandb_run.py:_restore():2411] restore done
+2025-08-27 10:47:39,651 INFO    MainThread:844297 [wandb_run.py:_footer_history_summary_info():3903] rendering history
+2025-08-27 10:47:39,652 INFO    MainThread:844297 [wandb_run.py:_footer_history_summary_info():3935] rendering summary
+2025-08-27 10:47:39,653 INFO    MainThread:844297 [wandb_run.py:_footer_sync_info():3864] logging synced files

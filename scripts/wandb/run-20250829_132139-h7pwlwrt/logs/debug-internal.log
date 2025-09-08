@@ -1,0 +1,6 @@
+{"time":"2025-08-29T13:21:39.761980868-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-08-29T13:21:40.012290593-07:00","level":"INFO","msg":"stream: created new stream","id":"h7pwlwrt"}
+{"time":"2025-08-29T13:21:40.012547118-07:00","level":"INFO","msg":"stream: started","id":"h7pwlwrt"}
+{"time":"2025-08-29T13:21:40.012565544-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"h7pwlwrt"}
+{"time":"2025-08-29T13:21:40.012572557-07:00","level":"INFO","msg":"handler: started","stream_id":"h7pwlwrt"}
+{"time":"2025-08-29T13:21:40.012581023-07:00","level":"INFO","msg":"sender: started","stream_id":"h7pwlwrt"}

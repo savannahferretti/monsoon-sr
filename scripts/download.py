@@ -2,7 +2,6 @@
 
 import os
 import re
-import gcsfs
 import fsspec
 import logging
 import warnings
@@ -31,24 +30,24 @@ LEVRANGE  = (500.,1000.)
 
 def import_era5():
     '''
-    Purpose: Access ERA5 data stored on Google Cloud Storage and return it as an xarray.Dataset.
-    Returns: 
-    - xarray.Dataset: ERA5 Dataset
+    Purpose: Lazily import ERA5 (ARCO) Zarr data from Google Cloud as an xarray.Dataset.
+    Returns:
+    - xarray.Dataset | None: ERA5 Dataset on success, or None if access fails
     '''
     try:
         store = 'gs://gcp-public-data-arco-era5/ar/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2/'
         ds = xr.open_zarr(store,decode_times=True)  
         logger.info('   Successfully fetched ERA5')
         return ds
-    except Exception as e:
-        logger.error(f'   Failed to fetch ERA5: {str(e)}')
+    except Exception:
+        logger.exception('   Failed to fetch ERA5')
         return None
 
 def import_imerg():
     '''
-    Purpose: Access IMERG V06 data stored on Microsoft Planetary Computer and return it as an xarray.Dataset.
+    Purpose: Lazily import GPM IMERG V06 Zarr data from Microsoft Planetary Computer STAC as an xarray.Dataset.
     Returns: 
-    - xarray.Dataset: IMERG V06 Dataset
+    - xarray.Dataset | None: IMERG V06 Dataset on success, or None if access fails
     '''
     try:
         store   = 'https://planetarycomputer.microsoft.com/api/stac/v1'
@@ -57,13 +56,15 @@ def import_imerg():
         ds      = xr.open_zarr(fsspec.get_mapper(assets.href,**assets.extra_fields['xarray:storage_options']),consolidated=True)
         logger.info('   Successfully fetched IMERG')
         return ds
-    except Exception as e:
-        logger.error(f'   Failed to fetch IMERG: {str(e)}')
+    except Exception:
+        logger.exception('   Failed to fetch IMERG')
         return None
 
 def standardize(da):
     '''
-    Purpose: Standardize the dimensions and coordinates of an xarray.DataArray.
+    Purpose: Rename dimensions to canonical names ('lat', 'lon', 'lev'), coerce coordinate dtypes (datetime64 for time 
+    and float for everything else), wrap longitudes to [-180, 180), drop any extra dimensions, de-duplicate time, and 
+    order/transpose to (lev, time, lat, lon) if 'lev' exists, otherwise (time, lat, lon).
     Args: 
     - da (xarray.DataArray): input DataArray
     Returns: 
@@ -71,35 +72,35 @@ def standardize(da):
     '''
     dimnames   = {'latitude':'lat','longitude':'lon','level':'lev'}
     da         = da.rename({oldname:newname for oldname,newname in dimnames.items() if oldname in da.dims})
-    targetdims = ['lev','time','lat','lon'] if 'lev' in da.dims else ['time','lat','lon']
+    targetdims = [dim for dim in ('lev','time','lat','lon') if dim in da.dims]
     extradims  = [dim for dim in da.dims if dim not in targetdims]
-    if extradims:
-        da = da.drop_dims(extradims)
-    for dim in targetdims:
+    da = da.drop_dims(extradims) if extradims else da
+    for dim in da.dims:
         if dim=='time':
             if da.coords[dim].dtype.kind!='M':
                 da.coords[dim] = da.indexes[dim].to_datetimeindex()
             da = da.sel(time=~da.time.to_index().duplicated(keep='first'))
-        elif dim=='lon':
-            da.coords[dim] = (da.coords[dim]+180)%360-180        
-        elif dim!='time':
-            da.coords[dim] = da.coords[dim].astype(float)
+        else:
+            da.coords[dim] = da.coords[dim].astype('float32')
+            if dim=='lon':
+                da.coords[dim] = (da.coords[dim]+180)%360-180
     da = da.sortby(targetdims).transpose(*targetdims)   
     return da
     
 def subset(da,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE):
     '''
-    Purpose: Subset an xarray.DataArray based on specified time, latitude, longitude, and pressure level ranges.
+    Purpose: Subset an xarray.DataArray by time (years and months), latitude/longitude ranges, and, if present, 
+    by pressure levels.
     Args:
     - da (xarray.DataArray): input DataArray
-    - years (list): list of years to include (defaults to YEARS)
-    - months (list): list of months to include (defaults to MONTHS)
-    - latrange (float, float): minimum and maximum latitudes to include (defaults to LATRANGE)
-    - lonrange (float, float): minimum and maximum longitudes to include (defaults to LONRANGE)
-    - levrange (float, float): minimum and maximum pressure levels to include (defaults to LEVRANGE)   
+    - years (list[int]): years to include (defaults to YEARS)
+    - months (list[int]): months to include (defaults to MONTHS)
+    - latrange (tuple[float,float]): minimum/maximum latitude (defaults to LATRANGE)
+    - lonrange (tuple[float,float]): minimum/maximum longitude (defaults to LONRANGE)
+    - levrange (tuple[float,float]): minimum/maximum pressure level in hPa (defaults to LEVRANGE, used only if 'lev' is a dimension)
     Returns:
     - xarray.DataArray: subsetted DataArray
-    '''    
+    ''' 
     da = da.sel(time=(da.time.dt.year.isin(years))&(da.time.dt.month.isin(months)))
     da = da.sel(lat=slice(*latrange),lon=slice(*lonrange))
     if 'lev' in da.dims:
@@ -108,18 +109,19 @@ def subset(da,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levr
 
 def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     '''
-    Purpose: Format an xarray.DataArray into an xarray.Dataset with standard attributes and metadata.
+    Purpose: Wrap a standardized xarray.DataArray into an xarray.Dataset, preserving coordinates and setting variable 
+    and global metadata.
     Args:
     - da (xarray.DataArray): input DataArray
-    - shortname (str): variable name abbreviation
-    - longname (str): variable name description
+    - shortname (str): variable name (abbreviation)
+    - longname (str): variable long name/description
     - units (str): variable units
     - author (str): author name (defaults to AUTHOR)
     - email (str): author email (defaults to EMAIL)    
     Returns:
-    - xarray.Dataset: Dataset with personalized metadata
+    - xarray.Dataset: Dataset containing the variable named 'shortname' and metadata
     '''    
-    ds = xr.Dataset(data_vars={shortname:([*da.dims],da.data)},coords={dim:da.coords[dim].data for dim in da.dims})
+    ds = da.to_dataset(name=shortname)
     ds[shortname].attrs = dict(long_name=longname,units=units)
     ds.time.attrs = dict(long_name='Time')
     ds.lat.attrs  = dict(long_name='Latitude',units='°N')
@@ -132,22 +134,23 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
 
 def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE,author=AUTHOR,email=EMAIL):
     '''
-    Purpose: Process an xarray.DataArray into an xarray.Dataset by applying the standardize(), subset(), and dataset() functions in sequence.
+    Purpose: Convert an xarray.DataArray into an xarray.Dataset by applying the standardize(), subset(), and dataset() 
+    functions in sequence.
     Args:
     - da (xarray.DataArray): input DataArray
-    - shortname (str): variable name abbreviation
-    - longname (str): variable name description 
+    - shortname (str): variable name (abbreviation)
+    - longname (str): variable long name/description 
     - units (str): variable units
-    - years (list): list of years to include (defaults to YEARS)
-    - months (list): list of months to include (defaults to MONTHS)
-    - latrange (float, float): minimum and maximum latitudes to include (defaults to LATRANGE)
-    - lonrange (float, float): minimum and maximum longitudes to include (defaults to LONRANGE)
-    - levrange (float, float): minimum and maximum pressure levels to include (defaults to LEVRANGE)
+    - years (list[int]): years to include (defaults to YEARS)
+    - months (list[int]): months to include (defaults to MONTHS)
+    - latrange (tuple[float,float]): minimum/maximum latitude (defaults to LATRANGE)
+    - lonrange (tuple[float,float]): minimum/maximum longitude (defaults to LONRANGE)
+    - levrange (tuple[float,float]): minimum/maximum pressure level in hPa (defaults to LEVRANGE, used only if 'lev' is a dimension)
     - author (str): author name (defaults to AUTHOR)
     - email (str): author email (defaults to EMAIL)
     Returns:
     - xarray.Dataset: processed Dataset
-    '''    
+    ''' 
     da = standardize(da)
     da = subset(da,years,months,latrange,lonrange,levrange)
     ds = dataset(da,shortname,longname,units,author,email)
@@ -155,27 +158,26 @@ def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRA
 
 def save(ds,savedir=SAVEDIR):
     '''
-    Purpose: Save an xarray.Dataset to a NetCDF file in the specified directory. Verify the file was saved successfully by attempting to reopen it.
+    Purpose: Save an xarray.Dataset to a NetCDF file in the specified directory, then verify the write by reopening.
     Args:
     - ds (xarray.Dataset): Dataset to save
-    - savedir (str): directory where the file should be saved (defaults to SAVEDIR)
+    - savedir (str): output directory (defaults to SAVEDIR)
     Returns:
-    - bool: True if the save operation was successful, False otherwise
-    '''  
+    - bool: True if write and verification succeed, otherwise False
+    '''
     shortname = list(ds.data_vars)[0]
     longname  = ds[shortname].attrs['long_name']
     filename  = re.sub(r'\s+','_',longname)+'.nc'
     filepath  = os.path.join(savedir,filename)
     logger.info(f'Attempting to save {filename}...')   
     try:
-        ds.to_netcdf(filepath,format='NETCDF4',engine='h5netcdf')
-        logger.info(f'   File writing successful')
-        with xr.open_dataset(filepath) as test:
+        ds.to_netcdf(filepath,engine='h5netcdf')
+        with xr.open_dataset(filepath,engine='h5netcdf') as _:
             pass
-        logger.info(f'   File verification successful')
+        logger.info('   File write successful')
         return True
-    except Exception as e:
-        logger.error(f'   Failed to save or verify: {e}')
+    except Exception:
+        logger.exception('   Failed to save or verify')
         return False
 
 if __name__=='__main__':

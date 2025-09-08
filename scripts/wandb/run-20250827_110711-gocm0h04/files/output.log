@@ -1,0 +1,2 @@
+2025-08-27 11:09:57 - INFO -    Early stopping at epoch 3
+2025-08-27 11:09:57 - ERROR - An unexpected error occurred: 'NNMODEL' object has no attribute 'bestmodel'
