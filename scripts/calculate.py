@@ -17,15 +17,16 @@ EMAIL     = 'savannah.ferretti@uci.edu'
 FILEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
 SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
 
-def import_data(filename,filedir=FILEDIR):
+def retrieve(longname,filedir=FILEDIR):
     '''
-    Purpose: Lazily import a NetCDF file as an xarray.DataArray and ensure pressure levels are ascending (if applicable).
+    Purpose: Lazily import a NetCDF file as an xr.DataArray and, if applicable, ensure pressure levels are ascending (e.g., [500,550,600,...] hPa).
     Args:
-    - filename (str): file name to import
+    - longname (str): variable long name/description
     - filedir (str): directory containing the file (defaults to FILEDIR)
     Returns:
-    - xarray.DataArray: DataArray with levels ordered (if applicable) 
+    - xr.DataArray: DataArray with levels ordered (if applicable) 
     '''
+    filename = f'{longname}.nc'
     filepath = os.path.join(filedir,filename)
     da = xr.open_dataarray(filepath,engine='h5netcdf')
     if 'lev' in da.dims:
@@ -34,26 +35,26 @@ def import_data(filename,filedir=FILEDIR):
             logger.info(f'   Levels for {filename} were reordered to ascending')
     return da
     
-def get_p_array(da):
+def create_p_array(da):
     '''
-    Purpose: Create a pressure xarray.DataArray from the 'lev' dimension.
+    Purpose: Create a pressure xr.DataArray from the 'lev' dimension.
     Args:
-    - da (xarray.DataArray): DataArray containing 'lev'
+    - da (xr.DataArray): DataArray containing 'lev'
     Returns:
-    - xarray.DataArray: pressure DataArray
+    - xr.DataArray: pressure DataArray
     '''
     p = da.lev.expand_dims({'time':da.time,'lat':da.lat,'lon':da.lon}).transpose('lev','time','lat','lon')
     return p
 
 def regrid_and_resample(da,gridtarget,frequency='h'):
     '''
-    Purpose: Regrid an xarray.DataArray to a target latitude-longitude grid and then resample in time.
+    Purpose: Regrid an xr.DataArray to a target latitude-longitude grid and then resample in time by taking the first value within each time bin.
     Args:
-    - da (xarray.DataArray): input DataArray
-    - gridtarget (xarray.DataArray): DataArray with target 'lat' and 'lon' for regridding
+    - da (xr.DataArray): input DataArray
+    - gridtarget (xr.DataArray): DataArray with target 'lat' and 'lon' for regridding
     - frequency (str): resampling frequency (defaults to 'h' for hourly)
     Returns:
-    - xarray.DataArray: regridded and time-resampled DataArray
+    - xr.DataArray: regridded and time-resampled DataArray
     '''
     regridder = xesmf.Regridder(da,gridtarget,method='bilinear')
     da = regridder(da,keep_attrs=True)
@@ -63,11 +64,11 @@ def regrid_and_resample(da,gridtarget,frequency='h'):
     
 def calc_es(t):
     '''
-    Purpose: Calculate saturation vapor pressure (eₛ) using Eqs. 17 and 18 from Huang J. 2018. J. Appl. Meteorol. Climatol.
+    Purpose: Calculate saturation vapor pressure (eₛ) using Eqs. 17 and 18 from Huang J. (2018), J. Appl. Meteorol. Climatol.
     Args:
-    - t (xarray.DataArray): temperature DataArray (K) 
+    - t (xr.DataArray): temperature DataArray (K) 
     Returns:
-    - xarray.DataArray: eₛ DataArray (hPa)
+    - xr.DataArray: eₛ DataArray (hPa)
     '''    
     tc = t-273.15
     eswat = np.exp(34.494-(4924.99/(tc+237.1)))/((tc+105.)**1.57)
@@ -77,13 +78,12 @@ def calc_es(t):
 
 def calc_qs(p,t):
     '''
-    Purpose: Calculate saturation specific humidity (qₛ) using Eq. 4 from Miller SFK. 2018. Atmos. Humidity Eq. 
-    Plymouth State Wea. Ctr.
+    Purpose: Calculate saturation specific humidity (qₛ) using Eq. 4 from Miller SFK. (2018), Atmos. Humidity Eq. Plymouth State Wea. Ctr.
     Args:
-    - p (xarray.DataArray): pressure DataArray (hPa)
-    - t (xarray.DataArray): temperature DataArray (K)
+    - p (xr.DataArray): pressure DataArray (hPa)
+    - t (xr.DataArray): temperature DataArray (K)
     Returns:
-    - xarray.DataArray: qₛ DataArray (kg/kg)
+    - xr.DataArray: qₛ DataArray (kg/kg)
     '''
     rv = 461.50   
     rd = 287.04   
@@ -94,16 +94,16 @@ def calc_qs(p,t):
 
 def calc_thetae(p,t,q=None,ps=None):
     '''
-    Purpose: Calculate equivalent potential temperature (θₑ) using Eqs. 43 and 55 from Bolton D. 1980. Mon. Wea. Rev.
+    Purpose: Calculate equivalent potential temperature (θₑ) using Eqs. 43 and 55 from Bolton D. (1980), Mon. Wea. Rev. 
     Options to calculate θₑ at the surface, or the saturated θₑ, are given.        
     Args:
-    - p (xarray.DataArray): pressure DataArray (hPa)
-    - t (xarray.DataArray): temperature DataArray (K)
-    - q (xarray.DataArray, optional): specific humidity DataArray (kg/kg); if None, saturated θₑ will be calculated
-    - ps (xarray.DataArray, optional): surface pressure DataArray (hPa); if given, θₑ at the surface will be calculated
-      (values > 1,000 hPa are clamped to 1,000 hPa to avoid interpolation errors)
+    - p (xr.DataArray): pressure DataArray (hPa)
+    - t (xr.DataArray): temperature DataArray (K)
+    - q (xr.DataArray, optional): specific humidity DataArray (kg/kg); if None, saturated θₑ will be calculated
+    - ps (xr.DataArray, optional): surface pressure DataArray (hPa); if given, θₑ at the surface will be calculated
+      (ps > 1,000 hPa are clamped to 1,000 hPa to prevent extrapolation beyond the available pressure levels from ERA5)
     Returns:
-    - xarray.DataArray: (regular, surface, or saturated) θₑ DataArray (K)
+    - xr.DataArray: (regular, surface, or saturated) θₑ DataArray (K)
     '''
     if q is None:
         q = calc_qs(p,t)
@@ -120,30 +120,17 @@ def calc_thetae(p,t,q=None,ps=None):
     e  = (p*r)/(epsilon+r)
     tl = 2840./(3.5*np.log(t)-np.log(e)-4.805)+55.
     thetae = t*(p0/p)**(0.2854*(1.-0.28*r))*np.exp((3.376/tl-0.00254)*1000.*r*(1.+0.81*r))
-    return thetae 
-
-# def filter_above_surface(da,ps):
-#     '''
-#     Purpose: Remove (set to NaN) any data in an xarray.DataArray that corresponds to pressure levels below the surface.
-#     Args:
-#     - da (xarray.DataArray): input DataArray
-#     - ps (xarray.DataArray): surface pressure DataArray (hPa)
-#     Returns:
-#     - xarray.DataArray: filtered DataArray
-#     '''
-#     da = xr.where(da.lev<=ps,da,np.nan)
-#     return da
+    return thetae
 
 def get_level_above(ptarget,levels,side):
     '''
-    Purpose: Find the pressure level immediately above a target pressure. With ascending pressure levels, 'above' means 
-    lower pressure/higher altitude.
+    Purpose: Find the pressure level immediately above a target pressure, i.e., the next smallest pressure (higher altitude).
     Args:
-    - ptarget (xarray.DataArray or numpy.ndarray): target pressures
-    - levels (numpy.ndarray): 1D array of ascending pressure levels
-    - side (str): 'left' or 'right' tie-breaking for numpy.searchsorted
+    - ptarget (xr.DataArray or np.ndarray): target pressures
+    - levels (np.ndarray): 1D array of ascending pressure levels (e.g., [500,550,600,...] hPa)
+    - side (str): 'left' or 'right' tie-breaking for np.searchsorted
     Returns:
-    - numpy.ndarray: array of pressure levels immediately above each target pressure (same shape as 'ptarget')
+    - np.ndarray: array of pressure levels immediately above each target (same shape as 'ptarget')
     '''
     searchidx = np.searchsorted(levels,ptarget,side=side)
     levabove  = levels[np.maximum(searchidx-1,0)]
@@ -151,14 +138,13 @@ def get_level_above(ptarget,levels,side):
 
 def get_level_below(ptarget,levels,side):
     '''
-    Purpose: Find the pressure level immediately below a target pressure. With ascending pressure levels, 'below' means 
-    higher pressure/lower altitude.
+    Purpose: Find the pressure level immediately below a target pressure, i.e., the next largest pressure (lower altitude).
     Args:
-    - ptarget (xarray.DataArray or numpy.ndarray): target pressures
-    - levels (numpy.ndarray): 1D array of ascending pressure levels
-    - side (str): 'left' or 'right' tie-breaking for numpy.searchsorted
+    - ptarget (xr.DataArray or np.ndarray): target pressures
+    - levels (np.ndarray): 1D array of ascending pressure levels (e.g., [500,550,600,...] hPa)
+    - side (str): 'left' or 'right' tie-breaking for np.searchsorted
     Returns:
-    - numpy.ndarray: array of pressure levels immediately below each target pressure (same shape as 'ptarget')
+    - np.ndarray: array of pressure levels immediately below each target (same shape as 'ptarget')
     '''
     searchidx = np.searchsorted(levels,ptarget,side=side)
     levbelow  = levels[np.minimum(searchidx,len(levels)-1)]
@@ -166,14 +152,13 @@ def get_level_below(ptarget,levels,side):
 
 def calc_layer_average(da,a,b):
     '''
-    Purpose: Calculate pressure-weighted vertical average of an xarray.DataArray between two levels ('a' and 'b'). 
-    Expects 'a' > 'b' since we integrate from higher to lower pressure.
+    Purpose: Calculate the pressure-weighted mean of an xr.DataArray between two pressure levels 'a' (bottom of layer) and 'b' (top of layer), with `a > b`.
     Args:
-    - da (xarray.DataArray): input DataArray with 'lev' dimension
-    - a (xarray.DataArray): DataArray of bottom boundary pressures (higher values, lower altitude)
-    - b (xarray.DataArray): DataArray of top boundary pressures (lower values, higher altitude)
+    - da (xr.DataArray): input DataArray with 'lev' dimension
+    - a (xr.DataArray): DataArray of bottom boundary pressures (higher values, lower altitude)
+    - b (xr.DataArray): DataArray of top boundary pressures (lower values, higher altitude)
     Returns:
-    - xarray.DataArray: layer-averaged DataArray
+    - xr.DataArray: layer-averaged DataArray
     '''
     da = da.load()
     a  = a.load()
@@ -200,14 +185,13 @@ def calc_layer_average(da,a,b):
     
 def calc_weights(ps,pbltop,lfttop):
     '''
-    Purpose: Calculate weights for the boundary layer (PBL) and lower free troposphere (LFT) using Eqs. 5a and 5b from 
-    Adames AF, Ahmed F, and Neelin JD. 2021. J. Atmos. Sci.
+    Purpose: Calculate weights for the boundary layer (PBL) and lower free troposphere (LFT) using Eqs. 5a and 5b from Adames AF, Ahmed F, and Neelin JD. 2021. J. Atmos. Sci.
     Args:
-    - ps (xarray.DataArray): surface pressure DataArray (hPa)
-    - pbltop (xarray.DataArray): DataArray of pressures at the top of the PBL (hPa)
-    - lfttop (xarray.DataArray): DataArray of pressures at the top of the LFT (hPa)
+    - ps (xr.DataArray): surface pressure DataArray (hPa)
+    - pbltop (xr.DataArray): DataArray of pressures at the top of the PBL (hPa)
+    - lfttop (xr.DataArray): DataArray of pressures at the top of the LFT (hPa)
     Returns:
-    - tuple[xarray.DataArray,xarray.DataArray]: PBL and LFT weights
+    - tuple[xr.DataArray,xr.DataArray]: PBL and LFT weights
     '''
     pblthickness = ps-pbltop
     lftthickness = pbltop-lfttop
@@ -219,13 +203,13 @@ def calc_bl_terms(thetaeb,thetael,thetaels,wb,wl):
     '''
     Purpose: Calculate CAPEL, SUBSATL, and BL following Eq. 1 from Ahmed F and Neelin JD. 2021. Geophys. Res. Lett.
     Args:
-    - thetaeb (xarray.DataArray): DataArray of θₑ averaged over the PBL (K)
-    - thetael (xarray.DataArray): DataArray of θₑ averaged over the LFT (K)
-    - thetaels (xarray.DataArray): DataArray of saturated θₑ averaged over the LFT (K)
-    - wb (xarray.DataArray): DataArray of PBL weights
-    - wl (xarray.DataArray): DataArray of LFT weights
+    - thetaeb (xr.DataArray): DataArray of θₑ averaged over the PBL (K)
+    - thetael (xr.DataArray): DataArray of θₑ averaged over the LFT (K)
+    - thetaels (xr.DataArray): DataArray of saturated θₑ averaged over the LFT (K)
+    - wb (xr.DataArray): DataArray of PBL weights
+    - wl (xr.DataArray): DataArray of LFT weights
     Returns:
-    - tuple[xarray.DataArray,xarray.DataArray,xarray.DataArray]: CAPEL, SUBSATL, and BL DataArrays
+    - tuple[xr.DataArray,xr.DataArray,xr.DataArray]: CAPEL, SUBSATL, and BL DataArrays
     '''
     g       = 9.81
     kappal  = 3.
@@ -237,17 +221,16 @@ def calc_bl_terms(thetaeb,thetael,thetaels,wb,wl):
 
 def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     '''
-    Purpose: Wrap a standardized xarray.DataArray into an xarray.Dataset, preserving coordinates and setting variable 
-    and global metadata.
+    Purpose: Wrap a standardized xr.DataArray into an xr.Dataset, preserving coordinates and setting variable and global metadata.
     Args:
-    - da (xarray.DataArray): input DataArray
+    - da (xr.DataArray): input DataArray
     - shortname (str): variable name (abbreviation)
     - longname (str): variable long name/description
     - units (str): variable units
     - author (str): author name (defaults to AUTHOR)
     - email (str): author email (defaults to EMAIL)    
     Returns:
-    - xarray.Dataset: Dataset containing the variable named 'shortname' and metadata
+    - xr.Dataset: Dataset containing the variable named 'shortname' and metadata
     '''    
     dims = ('time','lat','lon','lev') if 'lev' in da.dims else ('time','lat','lon')
     da = da.transpose(*dims)
@@ -264,17 +247,16 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     
 def save(ds,savedir=SAVEDIR):
     '''
-    Purpose: Save an xarray.Dataset to a NetCDF file in the specified directory, then verify the write by reopening.
+    Purpose: Save an xr.Dataset to a NetCDF file in the specified directory, then verify the write by reopening.
     Args:
-    - ds (xarray.Dataset): Dataset to save
+    - ds (xr.Dataset): Dataset to save
     - savedir (str): output directory (defaults to SAVEDIR)
     Returns:
     - bool: True if write and verification succeed, otherwise False
     '''  
+    os.makedirs(savedir,exist_ok=True)
     shortname = list(ds.data_vars)[0]
-    #######################################
-    filename  = f'{shortname}_unfiltered.nc'
-    #######################################
+    filename  = f'{shortname}.nc' 
     filepath  = os.path.join(savedir,filename)
     logger.info(f'Attempting to save {filename}...')   
     try:
@@ -287,93 +269,13 @@ def save(ds,savedir=SAVEDIR):
         logger.exception('   Failed to save or verify')
         return False
 
-# if __name__=='__main__':
-#     try:
-#         logger.info('Importing all raw variables...')        
-#         pr = import_data('IMERG_V06_precipitation_rate.nc')
-#         ps = import_data('ERA5_surface_pressure.nc')
-#         t  = import_data('ERA5_air_temperature.nc')
-#         q  = import_data('ERA5_specific_humidity.nc')
-#         logger.info('Resampling/regridding precipitation...')
-#         resampledpr = regrid_and_resample(pr.load(),ps.load())
-#         del pr
-#         logger.info('Beginning chunking...')
-#         nyears     = len(np.unique(ps.time.dt.year.values))
-#         timechunks = np.array_split(np.arange(len(ps.time)),nyears)
-#         results    = {
-#             't':[],
-#             'q':[],
-#             'capeprofile':[],
-#             'subsatprofile':[],
-#             'cape':[],
-#             'subsat':[],
-#             'bl':[]}
-#         for i,timechunk in enumerate(timechunks):
-#             logger.info(f'Processing time chunk {i+1}/{len(timechunks)}...')
-#             tchunk  = t.isel(time=timechunk).load()
-#             qchunk  = q.isel(time=timechunk).load()
-#             pschunk = ps.isel(time=timechunk).load()
-#             pchunk  = get_p_array(qchunk)
-#             logger.info('   Calculating equivalent potential temperature terms')
-#             thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
-#             thetaeschunk    = calc_thetae(pchunk,tchunk)
-#             thetaesurfchunk = calc_thetae(pchunk,tchunk,qchunk,pschunk)
-#             del pchunk
-#             logger.info('   Filtering out data where the pressure level is below the surface')    
-#             filteredtchunk = filter_above_surface(tchunk,pschunk)
-#             filteredqchunk = filter_above_surface(qchunk,pschunk)
-#             filteredthetaechunk  = filter_above_surface(thetaechunk,pschunk)
-#             filteredthetaeschunk = filter_above_surface(thetaeschunk,pschunk)
-#             del tchunk,qchunk           
-#             logger.info('   Calculating CAPE-like and SUBSAT-like profiles')    
-#             capeprofilechunk   = thetaesurfchunk-filteredthetaeschunk
-#             subsatprofilechunk = filteredthetaeschunk-filteredthetaechunk
-#             del thetaesurfchunk,filteredthetaechunk,filteredthetaeschunk
-#             logger.info('   Calculating layer averages')
-#             pbltopchunk = pschunk-100.
-#             lfttopchunk = xr.full_like(pschunk,500.)
-#             thetaebchunk    = calc_layer_average(thetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
-#             thetaelchunk    = calc_layer_average(thetaechunk,pbltopchunk,lfttopchunk)
-#             thetaelschunk   = calc_layer_average(thetaeschunk,pbltopchunk,lfttopchunk)
-#             wbchunk,wlchunk = calc_weights(pschunk,pbltopchunk,lfttopchunk)
-#             del pschunk,pbltopchunk,lfttopchunk,thetaechunk,thetaeschunk
-#             logger.info('   Calculating BL terms')
-#             capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelschunk,wbchunk,wlchunk)
-#             del wbchunk,wlchunk,thetaebchunk,thetaelchunk,thetaelschunk
-#             logger.info('   Appending chunk results')
-#             results['t'].append(filteredtchunk)
-#             results['q'].append(filteredqchunk)
-#             results['capeprofile'].append(capeprofilechunk)
-#             results['subsatprofile'].append(subsatprofilechunk)
-#             results['cape'].append(capechunk)
-#             results['subsat'].append(subsatchunk)
-#             results['bl'].append(blchunk)
-#             del filteredtchunk,filteredqchunk,capeprofilechunk,subsatprofilechunk,capechunk,subsatchunk,blchunk
-#         del ps,t,q
-#         logger.info('Concatenating results and saving...')
-#         dslist = [
-#             dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
-#             dataset(xr.concat(results['t'],dim='time'),'t','Filtered air temperature','K'),
-#             dataset(xr.concat(results['q'],dim='time'),'q','Filtered specific humidity','kg/kg'),
-#             dataset(xr.concat(results['capeprofile'],dim='time'),'capeprofile','θₑ(surface) - saturated θₑ(p)','K'),
-#             dataset(xr.concat(results['subsatprofile'],dim='time'),'subsatprofile','Saturated θₑ(p) - θₑ(p)','K'),   
-#             dataset(xr.concat(results['cape'],dim='time'),'cape','Undilute buoyancy in the lower troposphere','K'),
-#             dataset(xr.concat(results['subsat'],dim='time'),'subsat','Lower free-tropospheric subsaturation','K'),
-#             dataset(xr.concat(results['bl'],dim='time'),'bl','Average buoyancy in the lower troposphere','m/s²')]
-#         for ds in dslist:
-#             save(ds)
-#             del ds
-#         logger.info('Script execution completed successfully!')
-#     except Exception as e:
-#         logger.error(f'An unexpected error occurred: {str(e)}')
-
 if __name__=='__main__':
     try:
         logger.info('Importing all raw variables...')        
-        pr = import_data('IMERG_V06_precipitation_rate.nc')
-        ps = import_data('ERA5_surface_pressure.nc')
-        t  = import_data('ERA5_air_temperature.nc')
-        q  = import_data('ERA5_specific_humidity.nc')
+        pr = retrieve('IMERG_V06_precipitation_rate')
+        ps = retrieve('ERA5_surface_pressure')
+        t  = retrieve('ERA5_air_temperature')
+        q  = retrieve('ERA5_specific_humidity')
         logger.info('Resampling/regridding precipitation...')
         resampledpr = regrid_and_resample(pr.load(),ps.load())
         del pr
@@ -393,7 +295,7 @@ if __name__=='__main__':
             tchunk  = t.isel(time=timechunk).load()
             qchunk  = q.isel(time=timechunk).load()
             pschunk = ps.isel(time=timechunk).load()
-            pchunk  = get_p_array(qchunk)
+            pchunk  = create_p_array(qchunk)
             logger.info('   Calculating equivalent potential temperature terms')
             thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
             thetaeschunk    = calc_thetae(pchunk,tchunk)

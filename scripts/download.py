@@ -2,6 +2,7 @@
 
 import os
 import re
+import sys
 import fsspec
 import logging
 import warnings
@@ -28,50 +29,48 @@ LATRANGE  = (5.,25.)
 LONRANGE  = (60.,90.)
 LEVRANGE  = (500.,1000.)
 
-def import_era5():
+def retrieve_era5():
     '''
-    Purpose: Lazily import ERA5 (ARCO) Zarr data from Google Cloud as an xarray.Dataset.
+    Purpose: Retrieve the ERA5 (ARCO) Zarr store from Google Cloud and return it as an xr.Dataset.
     Returns:
-    - xarray.Dataset | None: ERA5 Dataset on success, or None if access fails
+    - xr.Dataset: ERA5 Dataset on success, the program exists if access fails
     '''
     try:
         store = 'gs://gcp-public-data-arco-era5/ar/1959-2022-full_37-1h-0p25deg-chunk-1.zarr-v2/'
-        ds = xr.open_zarr(store,decode_times=True)  
-        logger.info('   Successfully fetched ERA5')
+        ds    = xr.open_zarr(store,decode_times=True)  
+        logger.info('   Successfully retrieved ERA5')
         return ds
     except Exception:
-        logger.exception('   Failed to fetch ERA5')
-        return None
+        logger.exception('   Failed to retrieve ERA5')
+        sys.exit(1)
 
-def import_imerg():
+def retrieve_imerg():
     '''
-    Purpose: Lazily import GPM IMERG V06 Zarr data from Microsoft Planetary Computer STAC as an xarray.Dataset.
+    Purpose: Retrieve the GPM IMERG V06 Zarr store from Microsoft Planetary Computer and return it as an xr.Dataset.
     Returns: 
-    - xarray.Dataset | None: IMERG V06 Dataset on success, or None if access fails
+    - xr.Dataset: IMERG V06 Dataset on success, the program exists if access fails
     '''
     try:
         store   = 'https://planetarycomputer.microsoft.com/api/stac/v1'
         catalog = pystac.Client.open(store, modifier=planetary_computer.sign_inplace)
         assets  = catalog.get_collection('gpm-imerg-hhr').assets['zarr-abfs']
         ds      = xr.open_zarr(fsspec.get_mapper(assets.href,**assets.extra_fields['xarray:storage_options']),consolidated=True)
-        logger.info('   Successfully fetched IMERG')
+        logger.info('   Successfully retrieved IMERG')
         return ds
     except Exception:
-        logger.exception('   Failed to fetch IMERG')
-        return None
+        logger.exception('   Failed to retrieve IMERG')
+        sys.exit(1)
 
 def standardize(da):
     '''
-    Purpose: Rename dimensions to canonical names ('lat', 'lon', 'lev'), coerce coordinate dtypes (datetime64 for time 
-    and float for everything else), wrap longitudes to [-180, 180), drop any extra dimensions, de-duplicate time, and 
-    order/transpose to (lev, time, lat, lon) if 'lev' exists, otherwise (time, lat, lon).
+    Purpose: Standardize the names, data types, and order of dimensions of an xr.DataArray.
     Args: 
-    - da (xarray.DataArray): input DataArray
+    - da (xr.DataArray): input DataArray
     Returns: 
-    - xarray.DataArray: standardized DataArray
+    - xr.DataArray: standardized DataArray
     '''
     dimnames   = {'latitude':'lat','longitude':'lon','level':'lev'}
-    da         = da.rename({oldname:newname for oldname,newname in dimnames.items() if oldname in da.dims})
+    da         = da.rename({old:new for old,new in dimnames.items() if old in da.dims})
     targetdims = [dim for dim in ('lev','time','lat','lon') if dim in da.dims]
     extradims  = [dim for dim in da.dims if dim not in targetdims]
     da = da.drop_dims(extradims) if extradims else da
@@ -89,17 +88,16 @@ def standardize(da):
     
 def subset(da,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE):
     '''
-    Purpose: Subset an xarray.DataArray by time (years and months), latitude/longitude ranges, and, if present, 
-    by pressure levels.
+    Purpose: Subset an xr.DataArray by time (years/months), latitude/longitude ranges, and, if present, by pressure levels.
     Args:
-    - da (xarray.DataArray): input DataArray
+    - da (xr.DataArray): input DataArray
     - years (list[int]): years to include (defaults to YEARS)
     - months (list[int]): months to include (defaults to MONTHS)
     - latrange (tuple[float,float]): minimum/maximum latitude (defaults to LATRANGE)
     - lonrange (tuple[float,float]): minimum/maximum longitude (defaults to LONRANGE)
     - levrange (tuple[float,float]): minimum/maximum pressure level in hPa (defaults to LEVRANGE, used only if 'lev' is a dimension)
     Returns:
-    - xarray.DataArray: subsetted DataArray
+    - xr.DataArray: subsetted DataArray
     ''' 
     da = da.sel(time=(da.time.dt.year.isin(years))&(da.time.dt.month.isin(months)))
     da = da.sel(lat=slice(*latrange),lon=slice(*lonrange))
@@ -109,17 +107,16 @@ def subset(da,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levr
 
 def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     '''
-    Purpose: Wrap a standardized xarray.DataArray into an xarray.Dataset, preserving coordinates and setting variable 
-    and global metadata.
+    Purpose: Wrap a standardized xr.DataArray into an xr.Dataset, preserving coordinates and setting variable and global metadata.
     Args:
-    - da (xarray.DataArray): input DataArray
+    - da (xr.DataArray): input DataArray
     - shortname (str): variable name (abbreviation)
     - longname (str): variable long name/description
     - units (str): variable units
     - author (str): author name (defaults to AUTHOR)
     - email (str): author email (defaults to EMAIL)    
     Returns:
-    - xarray.Dataset: Dataset containing the variable named 'shortname' and metadata
+    - xr.Dataset: Dataset containing the variable named 'shortname' and metadata
     '''    
     ds = da.to_dataset(name=shortname)
     ds[shortname].attrs = dict(long_name=longname,units=units)
@@ -134,10 +131,9 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
 
 def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE,author=AUTHOR,email=EMAIL):
     '''
-    Purpose: Convert an xarray.DataArray into an xarray.Dataset by applying the standardize(), subset(), and dataset() 
-    functions in sequence.
+    Purpose: Convert an xr.DataArray into an xr.Dataset by applying the standardize(), subset(), and dataset() functions in sequence.
     Args:
-    - da (xarray.DataArray): input DataArray
+    - da (xr.DataArray): input DataArray
     - shortname (str): variable name (abbreviation)
     - longname (str): variable long name/description 
     - units (str): variable units
@@ -149,7 +145,7 @@ def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRA
     - author (str): author name (defaults to AUTHOR)
     - email (str): author email (defaults to EMAIL)
     Returns:
-    - xarray.Dataset: processed Dataset
+    - xr.Dataset: processed Dataset
     ''' 
     da = standardize(da)
     da = subset(da,years,months,latrange,lonrange,levrange)
@@ -158,13 +154,14 @@ def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRA
 
 def save(ds,savedir=SAVEDIR):
     '''
-    Purpose: Save an xarray.Dataset to a NetCDF file in the specified directory, then verify the write by reopening.
+    Purpose: Save an xr.Dataset to a NetCDF file in the specified directory, then verify the write by reopening.
     Args:
-    - ds (xarray.Dataset): Dataset to save
+    - ds (xr.Dataset): Dataset to save
     - savedir (str): output directory (defaults to SAVEDIR)
     Returns:
     - bool: True if write and verification succeed, otherwise False
     '''
+    os.makedirs(savedir,exist_ok=True)
     shortname = list(ds.data_vars)[0]
     longname  = ds[shortname].attrs['long_name']
     filename  = re.sub(r'\s+','_',longname)+'.nc'
@@ -182,9 +179,9 @@ def save(ds,savedir=SAVEDIR):
 
 if __name__=='__main__':
     try:
-        logger.info('Fetching ERA5 and IMERG data...')
-        era5  = import_era5()
-        imerg = import_imerg()
+        logger.info('Retrieving ERA5 and IMERG data...')
+        era5  = retrieve_era5()
+        imerg = retrieve_imerg()
         logger.info('Extracting variable data...')
         prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24
         psdata = era5.surface_pressure/100

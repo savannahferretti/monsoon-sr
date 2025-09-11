@@ -25,71 +25,9 @@ CONFIGS  = [
     {'name':'exp_5','inputvars':['capeprofile','subsatprofile'],'description':'Experiment 5'},
     {'name':'exp_6','inputvars':['t','q'],'description':'Experiment 6'}]
 
-
-
-class PrecipDataset(Dataset):
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-class MLP(nn.Module):
-
-    def __init__(self,inputsize):
-        '''
-        Purpose: Define a feedforward multi-layer perceptron (MLP) for precipitation prediction.
-        Args:
-        - inputsize (int): number of pressure levels the input data is available on (1 for surface variables)
-        '''
-        super(MLP,self).__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(inputsize,256),nn.BatchNorm1d(256),nn.GELU(),
-            nn.Linear(256,128),nn.BatchNorm1d(128),nn.GELU(),
-            nn.Linear(128,64),nn.BatchNorm1d(64),nn.GELU(),
-            nn.Linear(64,32),nn.BatchNorm1d(32),nn.GELU(),
-            nn.Linear(32,1),nn.ReLU())
-
-    def forward(self,X):
-        '''
-        Purpose: Forward pass through the MLP.
-        Args:
-        - X (torch.Tensor): input features tensor of shape (nsamples, inputsize)
-        Returns:
-        - torch.Tensor: raw prediction tensor of shape (nsamples, 1)
-        '''
-        return self.layers(x)
-
 class NNMODEL:
     
-    def __init__(self,inputsize,batchsize=64000,epochs=30,criterion=nn.MSELoss(),learningrate=1e-4,patience=3):
+    def __init__(self,inputsize,batchsize=64000,epochs=30,criterion=torch.nn.MSELoss(),learningrate=1e-4,patience=3):
         '''
         Purpose: Initialize a NN model for precipitation prediction.
         Args:
@@ -100,45 +38,22 @@ class NNMODEL:
         - learningrate (float): learning rate (defaults to 0.0001)
         - patience (int): early stopping patience (defaults to 3)
         '''
-        self.inputsize    = int(inputsize)
-        self.batchsize    = int(batchsize)
-        self.epochs       = int(epochs)
+        self.inputsize    = inputsize
+        self.batchsize    = batchsize
+        self.epochs       = epochs
         self.criterion    = criterion
-        self.learningrate = float(learningrate)
-        self.patience     = int(patience)
+        self.learningrate = learningrate
+        self.patience     = patience
         self.device       = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model        = MLP(self.inputsize).to(self.device)
+        self.model        = torch.nn.Sequential(
+            torch.nn.Linear(self.inputsize,256),torch.nn.BatchNorm1d(256),torch.nn.GELU(),
+            torch.nn.Linear(256,128),torch.nn.BatchNorm1d(128),torch.nn.GELU(),
+            torch.nn.Linear(128,64),torch.nn.BatchNorm1d(64),torch.nn.GELU(),
+            torch.nn.Linear(64,32),torch.nn.BatchNorm1d(32),torch.nn.GELU(),
+            torch.nn.Linear(32,1)).to(self.device)
         self.bestloss     = float('inf')
         self.bestepoch    = 0
-        self.beststate    = None    
-
-    def save(self,name,modeldir=MODELDIR):
-        '''
-        Purpose: Save the best model (lowest validation loss) to a PyTorch checkpoint file.
-        Args:
-        - name (str): model name prefix
-        - modeldir (str): output directory (defaults to MODELDIR)
-        '''
-        os.makedirs(modeldir,exist_ok=True)
-        filename = f'{name}_best.pth'
-        filepath = os.path.join(modeldir,filename)
-        torch.save(self.beststate,path)
-        self.bestpath = filepath
-
-    def load(self,name,modeldir=MODELDIR):
-        '''
-        Purpose: Load the best model (lowest validation loss) weights from disk and set model to eval().
-        Args:
-        - name (str): model name prefix
-        - modeldir (str): directory where model weights are saved (defaults to MODELDIR)
-        '''
-        filename = f'{name}_best.pth'
-        filepath = os.path.join(modeldir,filename)
-        state = torch.load(filepath,map_location=self.device)
-        self.model.load_state_dict(state)
-        self.model.to(self.device).eval()
-        self.bestpath = filepath
-
+        self.bestmodel    = None
         
     def fit(self,Xtrain,Xvalid,ytrain,yvalid):
         '''
@@ -158,24 +73,28 @@ class NNMODEL:
         counter     = 0
         starttime   = time.time()
         for epoch in range(self.epochs):
-            trainloss = 0.0
             self.model.train()
-            for X,y in trainloader:
-                X,y = X.to(self.device),y.to(self.device)
+            sumbatchloss = 0.0
+            samplesseen  = 0
+            for Xbatch, ybatch in trainloader:
+                Xbatch = Xbatch.to(self.device)
+                ybatch = ybatch.to(self.device)
                 optimizer.zero_grad()
-                ypred = self.model(X)
-                loss  = self.criterion(ypred.squeeze(),y.squeeze())
-                loss.backward()
+                ybatchpred    = self.model(Xbatch)
+                meanbatchloss = self.criterion(ybatchpred.squeeze(),ybatch.squeeze())
+                meanbatchloss.backward()
                 optimizer.step()
-                trainloss += loss.item()
-                if not np.isfinite(trainloss):
-                    logger.warning('   Training loss is non-finite. Stopping...')
-                    break
-            validloss = 0.0
+                sumbatchloss += float(meanbatchloss)*Xbatch.size(0)
+                samplesseen  += Xbatch.size(0)
+            trainloss = sumbatchloss/samplesseen
+            if not np.isfinite(trainloss):
+                logger.warning('   Training loss is non-finite. Stopping...')
+                break
             self.model.eval()
+            sumbatchloss = 0.0
+            samplesseen  = 0
             with torch.no_grad():
-                for X,y in validloader:
-                    X,y = X.to(self.device),y.to(self.device)
+                for Xbatch,ybatch in validloader:
                     Xbatch = Xbatch.to(self.device)
                     ybatch = ybatch.to(self.device)
                     ybatchpred = self.model(Xbatch)
@@ -188,25 +107,23 @@ class NNMODEL:
             else:
                 logger.warning('   Validation loss is non-finite. Stopping...')
                 break
-           wandb.log({
+            wandb.log({
                 'Epoch':epoch+1,
                 'Training loss':trainloss,
                 'Validation loss':validloss,
                 'Learning rate':optimizer.param_groups[0]['lr']})
-        if validloss<self.bestloss:
-            counter = 0
-            self.bestloss  = validloss
-            self.bestepoch = epoch+1
-            self.beststate = {key:value.detach().cpu().clone() for key,value in self.model.state_dict().items()}
-            self.save(name)
-        else:
-            counter += 1
-            if counter>self.patience:
-                logger.info(f' Early stopping at epoch {epoch+1}!')
-                break
-        if self.beststate is not None:
-            self.model.load_state_dict(self.beststate)
-            self.model.to(self.device).eval()
+            if validloss<self.bestloss:
+                counter = 0
+                self.bestloss  = validloss
+                self.bestepoch = epoch+1
+                self.bestmodel = self.model.state_dict().copy()
+            else:
+                counter += 1
+                if counter>self.patience:
+                    logger.info(f'   Early stopping at epoch {epoch+1}!')
+                    break
+        if self.bestmodel is not None:
+            self.model.load_state_dict(self.bestmodel)
         trainingtime = time.time()-starttime
         wandb.run.summary.update({
             'Best model at epoch':self.bestepoch,
@@ -214,7 +131,7 @@ class NNMODEL:
             'Total training epochs':epoch+1,
             'Training duration (s)':trainingtime,
             'Stopped early':counter>self.patience})
-        wandb.define_metric('Epoch', summary='none')
+        wandb.define_metric('Epoch',summary='none')
         for metric in ['Training loss','Validation loss','Learning rate']:
             wandb.define_metric(metric,step_metric='Epoch',summary='none')
 
@@ -235,43 +152,14 @@ class NNMODEL:
 
     def save(self,name,modeldir=MODELDIR):
         '''
-        Purpose: Save the best model (lowest validation loss) to a PyTorch checkpoint, including optimizer and metadata.
+        Purpose: Save the best model state to a PyTorch checkpoint.
         Args:
         - name (str): model name prefix
         - modeldir (str): output directory (defaults to MODELDIR)
-        '''
-        os.makedirs(modeldir,exist_ok=True)
+        '''        
         filename = f'{name}_best.pth'
         filepath = os.path.join(modeldir,filename)
-        torch.save(self.bestcheckpoint,filepath)
-
-
-    def save_best_model(self, run_name, modeldir=MODELDIR):
-        '''
-        Purpose: Save weights-only checkpoint for the current model as the best.
-        Args:
-        - run_name (str): file prefix for best weights
-        - modeldir (str): directory to save into
-        '''
-        os.makedirs(modeldir,exist_ok=True)
-        filename = f'{name}_best.pth'
-        filepath = os.path.join(modeldir,filename)
-        modelstate = {key:value.detach().cpu().clone() for key.value in self.model.state_dict().items()}
-        torch.save(mos, path)
-        self.best_weights_path = path
-
-    def load_best(self, run_name, modeldir=MODELDIR):
-        '''
-        Purpose: Load the best (lowest validation loss) weights from disk and set model to eval().
-        Args:
-        - run_name (str): file prefix used during training
-        - modeldir (str): directory from which to load
-        '''
-        path = os.path.join(modeldir, f'{run_name}_best_weights.pth')
-        state = torch.load(path, map_location=self.device)
-        self.model.load_state_dict(state)
-        self.model.to(self.device).eval()
-
+        torch.save(self.model.state_dict(),filepath)
 
 def normalize_input(trainarray,validarray,testarray,columnwise):
     '''

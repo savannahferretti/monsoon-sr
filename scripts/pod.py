@@ -17,7 +17,7 @@ CONFIGS  = [
     {'name':'bw_0.1','binwidth':0.1,'description':'Binwidth = 0.1 m/s²'},
     {'name':'bw_0.01','binwidth':0.01,'description':'Binwidth = 0.01 m/s²'},
     {'name':'bw_0.001','binwidth':0.001,'description':'Binwidth = 0.001 m/s²'}]
-
+        
 class PODMODEL:
     
     def __init__(self,binwidth,binmin=-0.6,binmax=0.1,samplethresh=50):
@@ -29,13 +29,13 @@ class PODMODEL:
         - binmax (float): maximum boundary for the binning range (defaults to 0.1 m/s²)
         - samplethresh (int): minimum number of samples required per bin to compute the bin average (defaults to 50)
         '''
-        self.binwidth     = binwidth
-        self.binmin       = binmin
-        self.binmax       = binmax
-        self.binedges     = np.arange(self.binmin,self.binmax+self.binwidth,self.binwidth)
+        self.binwidth     = float(binwidth)
+        self.binmin       = float(binmin)
+        self.binmax       = float(binmax)
+        self.binedges     = np.arange(self.binmin,self.binmax+self.binwidth,self.binwidth,dtype=np.float32)
         self.bincenters   = (self.binedges[:-1]+self.binedges[1:])/2
         self.nbins        = len(self.bincenters)
-        self.samplethresh = samplethresh
+        self.samplethresh = int(samplethresh)
         self.binmeans     = None
 
     def fit(self,Xtrain,ytrain):
@@ -44,6 +44,8 @@ class PODMODEL:
         Args:
         - Xtrain (numpy.ndarray): training BL values
         - ytrain (numpy.ndarray): training precipitation values
+        Returns:
+        - PODMODEL: fitted model (self)
         '''  
         idxs   = np.digitize(Xtrain,self.binedges)-1
         counts = np.zeros(self.nbins)
@@ -56,8 +58,10 @@ class PODMODEL:
                 sums[idx]   += yvalue
         with np.errstate(divide='ignore',invalid='ignore'):
             means = sums/counts
-            self.binmeans = np.where(counts>=self.samplethresh,means,np.nan)
-
+        means[counts<self.samplethresh] = np.nan
+        self.binmeans = means
+        return self
+        
     def predict(self,X):
         '''
         Purpose: Generate precipitation predictions from BL values using learned bin means.
@@ -128,6 +132,7 @@ def save(results,filename='pod_results.pkl',savedir=SAVEDIR):
     - bool: True if write and verification succeed, otherwise False
     '''
     try:
+        os.makedirs(savedir,exist_ok=True)
         filepath = os.path.join(savedir,filename)
         logger.info(f'Attempting to save results to {filepath}...')
         with open(filepath,'wb') as f:
