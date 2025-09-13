@@ -152,7 +152,8 @@ def get_level_below(ptarget,levels,side):
 
 def calc_layer_average(da,a,b):
     '''
-    Purpose: Calculate the pressure-weighted mean of an xr.DataArray between two pressure levels 'a' (bottom of layer) and 'b' (top of layer), with `a > b`.
+    Purpose: Calculate the pressure-weighted mean of an xr.DataArray between two pressure levels 'a' (bottom of layer) and 
+    'b' (top of layer), with `a > b`.
     Args:
     - da (xr.DataArray): input DataArray with 'lev' dimension
     - a (xr.DataArray): DataArray of bottom boundary pressures (higher values, lower altitude)
@@ -185,7 +186,8 @@ def calc_layer_average(da,a,b):
     
 def calc_weights(ps,pbltop,lfttop):
     '''
-    Purpose: Calculate weights for the boundary layer (PBL) and lower free troposphere (LFT) using Eqs. 5a and 5b from Adames AF, Ahmed F, and Neelin JD. 2021. J. Atmos. Sci.
+    Purpose: Calculate weights for the boundary layer (PBL) and lower free troposphere (LFT) using Eqs. 5a and 5b from Adames AF, 
+    Ahmed F, and Neelin JD. 2021. J. Atmos. Sci.
     Args:
     - ps (xr.DataArray): surface pressure DataArray (hPa)
     - pbltop (xr.DataArray): DataArray of pressures at the top of the PBL (hPa)
@@ -199,13 +201,13 @@ def calc_weights(ps,pbltop,lfttop):
     wl = 1-wb
     return wb,wl
 
-def calc_bl_terms(thetaeb,thetael,thetaels,wb,wl):
+def calc_bl_terms(thetaeb,thetael,thetaelsat,wb,wl):
     '''
     Purpose: Calculate CAPEL, SUBSATL, and BL following Eq. 1 from Ahmed F and Neelin JD. 2021. Geophys. Res. Lett.
     Args:
     - thetaeb (xr.DataArray): DataArray of θₑ averaged over the PBL (K)
     - thetael (xr.DataArray): DataArray of θₑ averaged over the LFT (K)
-    - thetaels (xr.DataArray): DataArray of saturated θₑ averaged over the LFT (K)
+    - thetaelsat (xr.DataArray): DataArray of saturated θₑ averaged over the LFT (K)
     - wb (xr.DataArray): DataArray of PBL weights
     - wl (xr.DataArray): DataArray of LFT weights
     Returns:
@@ -214,8 +216,8 @@ def calc_bl_terms(thetaeb,thetael,thetaels,wb,wl):
     g       = 9.81
     kappal  = 3.
     thetae0 = 340.
-    cape    = ((thetaeb-thetaels)/thetaels)*thetae0
-    subsat  = ((thetaels-thetael)/thetaels)*thetae0
+    cape    = ((thetaeb-thetaelsat)/thetaelsat)*thetae0
+    subsat  = ((thetaelsat-thetael)/thetaelsat)*thetae0
     bl      = (g/(kappal*thetae0))*((wb*cape)-(wl*subsat))
     return cape,subsat,bl
 
@@ -258,9 +260,12 @@ def save(ds,savedir=SAVEDIR):
     shortname = list(ds.data_vars)[0]
     filename  = f'{shortname}.nc' 
     filepath  = os.path.join(savedir,filename)
+    encoding  = (
+        {vardata:{'dtype':'float32'} for vardata in ds.data_vars}
+        | {coord:{'dtype':'float32'} for coord in ('lat','lon','lev') if coord in ds.coords})
     logger.info(f'Attempting to save {filename}...')   
     try:
-        ds.to_netcdf(filepath,engine='h5netcdf')
+        ds.to_netcdf(filepath,engine='h5netcdf',encoding=encoding)
         with xr.open_dataset(filepath,engine='h5netcdf') as _:
             pass
         logger.info('   File write successful')
@@ -283,13 +288,13 @@ if __name__=='__main__':
         nyears     = len(np.unique(ps.time.dt.year.values))
         timechunks = np.array_split(np.arange(len(ps.time)),nyears)
         results    = {
-            't':[],
-            'q':[],
-            'capeprofile':[],
-            'subsatprofile':[],
+            'bl':[],
             'cape':[],
             'subsat':[],
-            'bl':[]}
+            'capeproxy':[],
+            'subsatproxy':[],
+            't':[],
+            'q':[]}
         for i,timechunk in enumerate(timechunks):
             logger.info(f'Processing time chunk {i+1}/{len(timechunks)}...')
             tchunk  = t.isel(time=timechunk).load()
@@ -298,44 +303,44 @@ if __name__=='__main__':
             pchunk  = create_p_array(qchunk)
             logger.info('   Calculating equivalent potential temperature terms')
             thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
-            thetaeschunk    = calc_thetae(pchunk,tchunk)
+            thetaesatchunk  = calc_thetae(pchunk,tchunk)
             thetaesurfchunk = calc_thetae(pchunk,tchunk,qchunk,pschunk)
             del pchunk        
-            logger.info('   Calculating CAPE-like and SUBSAT-like profiles')    
-            capeprofilechunk   = thetaesurfchunk-thetaeschunk
-            subsatprofilechunk = thetaeschunk-thetaechunk
+            logger.info('   Calculating CAPE-like and SUBSAT-like proxy terms')    
+            capeproxychunk   = thetaesurfchunk-thetaesatchunk
+            subsatproxychunk = thetaesatchunk-thetaechunk
             del thetaesurfchunk
             logger.info('   Calculating layer averages')
             pbltopchunk = pschunk-100.
             lfttopchunk = xr.full_like(pschunk,500.)
             thetaebchunk    = calc_layer_average(thetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
             thetaelchunk    = calc_layer_average(thetaechunk,pbltopchunk,lfttopchunk)
-            thetaelschunk   = calc_layer_average(thetaeschunk,pbltopchunk,lfttopchunk)
+            thetaelsatchunk = calc_layer_average(thetaesatchunk,pbltopchunk,lfttopchunk)
             wbchunk,wlchunk = calc_weights(pschunk,pbltopchunk,lfttopchunk)
-            del pschunk,pbltopchunk,lfttopchunk,thetaechunk,thetaeschunk
+            del pschunk,pbltopchunk,lfttopchunk,thetaechunk,thetaesatchunk
             logger.info('   Calculating BL terms')
-            capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelschunk,wbchunk,wlchunk)
-            del wbchunk,wlchunk,thetaebchunk,thetaelchunk,thetaelschunk
+            capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelsatchunk,wbchunk,wlchunk)
+            del wbchunk,wlchunk,thetaebchunk,thetaelchunk,thetaelsatchunk
             logger.info('   Appending chunk results')
-            results['t'].append(tchunk)
-            results['q'].append(qchunk)
-            results['capeprofile'].append(capeprofilechunk)
-            results['subsatprofile'].append(subsatprofilechunk)
+            results['bl'].append(blchunk)
             results['cape'].append(capechunk)
             results['subsat'].append(subsatchunk)
-            results['bl'].append(blchunk)
-            del capeprofilechunk,subsatprofilechunk,capechunk,subsatchunk,blchunk,tchunk,qchunk
+            results['capeproxy'].append(capeproxychunk)
+            results['subsatproxy'].append(subsatproxychunk)
+            results['t'].append(tchunk)
+            results['q'].append(qchunk)
+            del blchunk,capechunk,subsatchunk,capeproxychunk,subsatproxychunk,tchunk,qchunk
         del ps,t,q
         logger.info('Concatenating results and saving...')
         dslist = [
             dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
-            dataset(xr.concat(results['t'],dim='time'),'t','Air temperature','K'),
-            dataset(xr.concat(results['q'],dim='time'),'q','Specific humidity','kg/kg'),
-            dataset(xr.concat(results['capeprofile'],dim='time'),'capeprofile','θₑ(surface) - saturated θₑ(p)','K'),
-            dataset(xr.concat(results['subsatprofile'],dim='time'),'subsatprofile','Saturated θₑ(p) - θₑ(p)','K'),   
+            dataset(xr.concat(results['bl'],dim='time'),'bl','Average buoyancy in the lower troposphere','m/s²'),
             dataset(xr.concat(results['cape'],dim='time'),'cape','Undilute buoyancy in the lower troposphere','K'),
             dataset(xr.concat(results['subsat'],dim='time'),'subsat','Lower free-tropospheric subsaturation','K'),
-            dataset(xr.concat(results['bl'],dim='time'),'bl','Average buoyancy in the lower troposphere','m/s²')]
+            dataset(xr.concat(results['capeproxy'],dim='time'),'capeproxy','θₑ(surface) - saturated θₑ(p)','K'),
+            dataset(xr.concat(results['subsatproxy'],dim='time'),'subsatproxy','Saturated θₑ(p) - θₑ(p)','K'), 
+            dataset(xr.concat(results['t'],dim='time'),'t','Air temperature','K'),
+            dataset(xr.concat(results['q'],dim='time'),'q','Specific humidity','kg/kg')]
         for ds in dslist:
             save(ds)
             del ds

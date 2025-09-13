@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 FILEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
 SAVEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
 PSFILEPATH  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw/ERA5_surface_pressure.nc'
-INPUTVARS   = ['bl','cape','subsat','capeprofile','subsatprofile','t','q']
+INPUTVARS   = ['bl','cape','subsat','capeproxy','subsatproxy','t','q']
 TARGETVAR   = 'pr'
 TRAINRANGE  = ('2000','2014')
 VALIDRANGE  = ('2015','2017')
@@ -53,13 +53,14 @@ def make_mask(refda,splitrange,psfilepath=PSFILEPATH):
     return mask
 
 
-def split(splitname, splitrange, inputvars=INPUTVARS, targetvar=TARGETVAR):
+def split(splitname,splitrange,chunksize=2208,inputvars=INPUTVARS,targetvar=TARGETVAR):
     '''
     Purpose: Assemble the inputs/target data and one shared mask for a given split into a single xr.Dataset,
-             and prepare an encoding dict for HDF5 (compression and chunking).
+    and prepare an encoding dictionary for HDF5 (compression and chunking).
     Args:
     - splitname (str): 'train' | 'valid' | 'test'
     - splitrange (tuple[str,str]): inclusive start/end years for the split
+    - chunksize (int): number of time steps to include for chunking (defaults to 2,208 for 3-month chunks)
     - inputvars (list[str]): input variable names (defaults to INPUTVARS)
     - targetvar (str): target variable name (defaults to TARGETVAR)
     Returns:
@@ -78,8 +79,12 @@ def split(splitname, splitrange, inputvars=INPUTVARS, targetvar=TARGETVAR):
     ds = xr.Dataset(datavars)
     encoding = {}
     for varname,da in ds.data_vars.items():
-        chunks = (24,da.lat.size,da.lon.size,da.lev.size) if 'lev' in da.dims else (24,da.lat.size,da.lon.size)
-        encoding[varname] = {'compression':'lzf','shuffle':True,'chunksizes':chunks}
+        chunks = (chunksize,da.lat.size,da.lon.size,da.lev.size) if 'lev' in da.dims else (chunksize,da.lat.size,da.lon.size)
+        encoding[varname] = {
+            'compression':'lzf',
+            'shuffle':True,
+            'chunksizes':chunks,
+            'dtype':da.dtype}
     plan = {
         'split':splitname,
         'years':splitrange,
@@ -88,18 +93,17 @@ def split(splitname, splitrange, inputvars=INPUTVARS, targetvar=TARGETVAR):
     logger.info(f'   Compiled {splitname} split')
     return plan
 
-def save(splitname,plan,savedir=SAVEDIR):
+def save(plan,savedir=SAVEDIR):
     '''
-    Purpose: Save a compiled xr.Dataset to a NetCDF file, then verify the write by reopening.
+    Purpose: Save a compiled xr.Dataset to a HDF5 file, then verify the write by reopening.
     Args:
-    - splitname (str): 'train' | 'valid' | 'test'
     - plan (dict): output of split()
     - savedir (str): output directory (defaults to SAVEDIR)
     Returns:
     - bool: True if writing and verification succeed, otherwise False
     '''
     os.makedirs(savedir,exist_ok=True)
-    filename = f'{splitname}.h5'
+    filename = f'{plan["split"]}.h5'
     filepath = os.path.join(savedir,filename)
     logger.info(f'Attempting to save {filename}...')
     try:
@@ -114,14 +118,14 @@ def save(splitname,plan,savedir=SAVEDIR):
 
 if __name__=='__main__':
     try:
-        splitdict = [
-            ('train',TRAINRANGE),
-            ('valid',VALIDRANGE),
-            ('test',TESTRANGE)]
-        for splitname,years in splitdict:
-            plan = split(splitname,years)
-            save(splitname,plan)
+        logger.info('Creating split plans and saving...')
+        planlist = [
+            split('train',TRAINRANGE),
+            split('valid',VALIDRANGE),
+            split('test',TESTRANGE)]
+        for plan in planlist:
+            save(plan)
             del plan
-        logger.info('All split files written successfully!')
+        logger.info('Script execution completed successfully!')
     except Exception as e:
-        logger.exception(f'Unexpected error: {e}')
+        logger.error(f'An unexpected error occurred: {str(e)}')

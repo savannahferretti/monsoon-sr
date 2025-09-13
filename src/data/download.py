@@ -32,6 +32,8 @@ LEVRANGE  = (500.,1000.)
 def retrieve_era5():
     '''
     Purpose: Retrieve the ERA5 (ARCO) Zarr store from Google Cloud and return it as an xr.Dataset.
+    Args:
+    - None
     Returns:
     - xr.Dataset: ERA5 Dataset on success, the program exists if access fails
     '''
@@ -47,6 +49,8 @@ def retrieve_era5():
 def retrieve_imerg():
     '''
     Purpose: Retrieve the GPM IMERG V06 Zarr store from Microsoft Planetary Computer and return it as an xr.Dataset.
+    Args:
+    - None
     Returns: 
     - xr.Dataset: IMERG V06 Dataset on success, the program exists if access fails
     '''
