@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
 FILEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
-SAVEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed'
+SAVEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/splits'
 PSFILEPATH  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw/ERA5_surface_pressure.nc'
 INPUTVARS   = ['bl','cape','subsat','capeproxy','subsatproxy','t','q']
 TARGETVAR   = 'pr'

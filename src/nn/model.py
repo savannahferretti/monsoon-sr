@@ -23,7 +23,7 @@ class NNModel(torch.nn.Module):
             torch.nn.Linear(256,128),       torch.nn.GELU(),
             torch.nn.Linear(128,64),        torch.nn.GELU(),
             torch.nn.Linear(64,32),         torch.nn.GELU(),
-            torch.nn.Linear(32,1))        
+            torch.nn.Linear(32,1),          torch.nn.ReLU())        
 
     def forward(self,X):
         '''
