@@ -52,7 +52,6 @@ def make_mask(refda,splitrange,psfilepath=PSFILEPATH):
     mask.name = 'mask'
     return mask
 
-
 def split(splitname,splitrange,chunksize=2208,inputvars=INPUTVARS,targetvar=TARGETVAR):
     '''
     Purpose: Assemble the inputs/target data and one shared mask for a given split into a single xr.Dataset,

@@ -19,50 +19,68 @@ FILEDIR     = CONFIGS['paths']['filedir']
 MODELDIR    = CONFIGS['paths']['modeldir']
 RESULTSDIR  = CONFIGS['paths']['resultsdir']
 RUNCONFIGS  = CONFIGS['runs']
+INPUTVAR    = 'bl'
+TARGETVAR   = 'pr'
 
-def load_data(splitname,filedir=FILEDIR):
+def load(splitname,inputvar=INPUTVAR,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
     Purpose: Load in the chosen data split for evaluation.
     Args:
     - splitname (str): 'valid' | 'test'
+    - inputvar (str): input variable name (defaults to INPUTVAR)
+    - targetvar (str): target variable name (defaults to TARGETVAR)
     - filedir (str): directory containing split files (defaults to FILEDIR)
     Returns:
-    - tuple[xr.DataArray,xr.DataArray]:  3D BL/precipitation DataArrays for evaluation
+    - tuple[xr.DataArray,xr.DataArray]: 3D BL/precipitation DataArrays for evaluation
     '''
     if splitname not in ('valid','test'):
-        raise ValueError("Split must be 'valid' or 'test'.")
+        raise ValueError("Splitname must be 'valid' or 'test'.")
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
-    evalds   = xr.open_dataset(filepath,engine='h5netcdf')[['bl','pr']]
-    X,y = evalds.bl.load(),evalds.pr.load()
+    evalds   = xr.open_dataset(filepath,engine='h5netcdf')[[inputvar,targetvar]]
+    X,y = evalds[inputvar].load(),evalds[targetvar].load()
     return X,y
 
-def load_model(runname,modeldir=MODELDIR):
+def fetch(runname,modeldir=MODELDIR):
     '''
-    Purpose: Load a trained POD model from NPZ and reconstruct a PODModel instance.
+    Purpose: Rebuild the trained POD model.
     Args:
-    - runname (str): model run name used in filename
+    - runname (str): model run name
     - modeldir (str): directory with saved models (defaults to MODELDIR)
     Returns:
     - PODModel: model with loaded parameters
     '''
     filename = f'pod_{runname}.npz'
     filepath = os.path.join(modeldir,filename)
-    data = np.load(filepath)
-    binwidth     = float(data['binwidth'])
-    binmin       = float(data['binmin'])
-    binmax       = float(data['binmax'])
-    samplethresh = int(data['samplethresh'])
-    model        = PODModel(binwidth,binmin=binmin,binmax=binmax,samplethresh=samplethresh)
-    model.binedges   = data['binedges'].astype(np.float32)
-    model.bincenters = data['bincenters'].astype(np.float32)
-    model.binmeans   = data['binmeans'].astype(np.float32)
-    model.nparams    = int(data['nparams'])
+    with np.load(filepath) as data:
+        model  = PODModel(
+            float(data['binwidth']),
+            binmin=float(data['binmin']),
+            binmax=float(data['binmax']),
+            samplethresh=int(data['samplethresh']))
+        model.binedges   = data['binedges'].astype(np.float32)
+        model.bincenters = data['bincenters'].astype(np.float32)
+        model.binmeans   = data['binmeans'].astype(np.float32)
+        model.nparams    = int(data['nparams'])
     return model
+
+def predict(model,X):
+    '''
+    Purpose: Run the POD forward pass and return precipitation predictions as an xr.DataArray.
+    Args:
+    - model (PODModel): trained/loaded POD model
+    - X (xr.DataArray): input 3D BL DataArray
+    Returns:
+    - xr.DataArray: 3D DataArray of predicted precipitation
+    '''
+    ypredflat = model.forward(X)
+    da = xr.DataArray(ypredflat.reshape(X.shape),dims=X.dims,coords=X.coords,name='predpr')
+    da.attrs = dict(long_name='POD-predicted precipitation',units='mm/day')
+    return da
 
 def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
     '''
-    Purpose: Save an xr.Dataset of predicted precipitation to a NetCDF file, then verify the write by reopening.
+    Purpose: Save an xr.DataArray of predicted precipitation to a NetCDF file, then verify the write by reopening.
     Args:
     - ypred (xr.DataArray): 3D DataArray of predicted precipitation
     - runname (str): model run name
@@ -74,15 +92,15 @@ def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
     os.makedirs(resultsdir,exist_ok=True)
     filename = f'pod_{runname}_{splitname}_pr.nc'
     filepath = os.path.join(resultsdir,filename)
-    logger.info(f'Attempting to save {filename}...')
+    logger.info(f'   Attempting to save {filename}...')
     try:
         ypred.to_netcdf(filepath,engine='h5netcdf')
         with xr.open_dataset(filepath,engine='h5netcdf') as _:
             pass
-        logger.info('   File write successful')
+        logger.info('      File write successful')
         return True
     except Exception:
-        logger.exception('   Failed to save or verify')
+        logger.exception('      Failed to save or verify')
         return False
 
 if __name__=='__main__':
@@ -91,14 +109,14 @@ if __name__=='__main__':
     args = parser.parse_args()
     try:
         logger.info(f'Loading {args.split} data split...')
-        X,y = load_data(args.split)
+        X,y = load(args.split)
         logger.info('Evaluating POD models...')
         for config in RUNCONFIGS:
             runname     = config['run_name']
             description = config['description']
             logger.info(f'   Evaluating {description}')
-            model = load_model(runname)
-            ypred = model.predict(X)
+            model = fetch(runname)
+            ypred = predict(model,X)
             save(ypred,runname,args.split)
             del model,ypred
         logger.info('Script execution completed successfully!')

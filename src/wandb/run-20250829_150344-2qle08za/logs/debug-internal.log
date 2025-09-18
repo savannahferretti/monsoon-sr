@@ -1,8 +1,0 @@
-{"time":"2025-08-29T15:03:45.216319609-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
-{"time":"2025-08-29T15:03:45.486151271-07:00","level":"INFO","msg":"stream: created new stream","id":"2qle08za"}
-{"time":"2025-08-29T15:03:45.48649311-07:00","level":"INFO","msg":"stream: started","id":"2qle08za"}
-{"time":"2025-08-29T15:03:45.486528709-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"2qle08za"}
-{"time":"2025-08-29T15:03:45.486551713-07:00","level":"INFO","msg":"sender: started","stream_id":"2qle08za"}
-{"time":"2025-08-29T15:03:45.486569998-07:00","level":"INFO","msg":"handler: started","stream_id":"2qle08za"}
-{"time":"2025-08-29T15:21:01.475563704-07:00","level":"ERROR","msg":"HTTP error","status":404,"method":"POST","url":"https://api.wandb.ai/files/savannah-research/NNs/2qle08za/file_stream"}
-{"time":"2025-08-29T15:21:01.476678996-07:00","level":"ERROR+4","msg":"filestream: fatal error: filestream: failed to upload: 404 Not Found path=files/savannah-research/NNs/2qle08za/file_stream: {\"error\":\"run NNs/2qle08za not found while streaming file\"}"}

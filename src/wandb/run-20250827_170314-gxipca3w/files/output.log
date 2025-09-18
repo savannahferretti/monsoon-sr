@@ -1,2 +1,0 @@
-2025-08-27 17:08:30 - INFO -    Early stopping at epoch 4
-2025-08-27 17:08:30 - ERROR - An unexpected error occurred: Expected state_dict to be dict-like, got <class 'NoneType'>.

@@ -297,9 +297,9 @@ if __name__=='__main__':
             'q':[]}
         for i,timechunk in enumerate(timechunks):
             logger.info(f'Processing time chunk {i+1}/{len(timechunks)}...')
+            pschunk = ps.isel(time=timechunk).load()
             tchunk  = t.isel(time=timechunk).load()
             qchunk  = q.isel(time=timechunk).load()
-            pschunk = ps.isel(time=timechunk).load()
             pchunk  = create_p_array(qchunk)
             logger.info('   Calculating equivalent potential temperature terms')
             thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import numpy as np
-import xarray as xr
 
 class PODModel:
     
@@ -24,40 +23,16 @@ class PODModel:
         self.binmeans     = None 
         self.nparams      = 0
 
-    def fit(self,X,y):
+    def forward(self,X):
         '''
-        Purpose: Train a POD model by computing average precipitation in each BL bin.
+        Purpose: Forward pass through the POD model.
         Args:
-        - X (xr.DataArray): 3D DataArray of BL values for training
-        - y (xr.DataArray): 3D DataArray of precipitation values for training
+        - X (xr.DataArray): input 3D BL DataArray
         Returns:
-        - None (updates self.binmeans)
-        '''
-        Xflat  = X.values.flatten()
-        yflat  = y.values.flatten()
-        idx    = np.digitize(Xflat,self.binedges)-1
-        mask   = (idx>=0)&(idx<self.nbins)&np.isfinite(yflat)
-        counts = np.bincount(idx[mask],minlength=self.nbins).astype(np.int32)
-        sums   = np.bincount(idx[mask],weights=yflat[mask],minlength=self.nbins).astype(np.float32)
-        with np.errstate(divide='ignore',invalid='ignore'):
-            means = sums/counts
-        means[counts<self.samplethresh] = np.nan
-        self.binmeans = means.astype(np.float32)
-        self.nparams  = int(np.isfinite(self.binmeans).sum())
-
-    def predict(self,X):
-        '''
-        Purpose: Generate precipitation predictions using the bin averages.
-        Args:
-        - X (xr.DataArray): input 3D DataArray of BL values
-        Returns:
-        - xr.DataArray: 3D DataArray of predicted precipitation
+        - np.ndarray: raw prediction array of shape (X.size,)
         '''
         if self.binmeans is None:
-            raise RuntimeError('POD model is not fit. Call fit() or load a saved model first.')
-        Xflat     = X.values.flatten()
+            raise RuntimeError('Parameters not set; train or load a model first.')
+        Xflat     = X.values.ravel()
         binidxs   = np.clip(np.digitize(Xflat,self.binedges)-1,0,self.nbins-1)
-        ypredflat = self.binmeans[binidxs]
-        ypred = xr.DataArray(ypredflat.reshape(X.shape),dims=X.dims,coords=X.coords,name='predpr')
-        ypred.attrs = dict(long_name='Predicted precipitation',units='mm/day')
-        return ypred
+        return self.binmeans[binidxs]

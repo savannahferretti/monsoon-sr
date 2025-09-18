@@ -1,0 +1,10 @@
+{
+  "paths": {
+    "filedir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/processed",
+    "modeldir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/models/pod",
+    "resultsdir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/results"},
+  "runs": [
+    {"run_name":"bw_01","bin_width":0.1,"description":"Binwidth = 0.1 m/s²"},
+    {"run_name":"bw_001","bin_width":0.01,"description":"Binwidth = 0.01 m/s²"},
+    {"run_name":"bw_0001","bin_width":0.001,"description":"Binwidth = 0.001 m/s²"}]
+}

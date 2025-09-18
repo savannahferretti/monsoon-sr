@@ -1,0 +1,163 @@
+#!/usr/bin/env python
+
+import os
+import json
+import logging
+import warnings
+import numpy as np
+import xarray as xr
+
+logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
+logger = logging.getLogger(__name__)
+warnings.filterwarnings('ignore')
+
+with open('configs.json','r',encoding='utf8') as f:
+    CONFIGS = json.load(f)
+FILEDIR     = CONFIGS['paths']['filedir']
+TARGETVAR   = 'pr'
+CHUNKSIZE   = 2208   
+
+def load(splitname,filedir=FILEDIR):
+    '''
+    Purpose: Load in a given data split as an xr.Dataset.
+    Args:
+    - splitname (str): 'train' | 'valid' | 'test'
+    - filedir (str): directory containing split files (defaults to FILEDIR)
+    Returns:
+    - xr.Dataset: training Dataset
+    '''
+    filename = f'{splitname}.h5'
+    filepath = os.path.join(filedir,filename)
+    splitds  = xr.open_dataset(filepath,engine='h5netcdf')
+    return splitds.load()
+    
+def reshape(da):
+    '''
+    Purpose: Convert an xr.DataArray into a 2D NumPy array suitable for passing through the NN.
+    Args:
+    - da (xr.DataArray): 3D or 4D DataArray
+    Returns:
+    - np.ndarray: 2D array of shape (nsamples, nfeatures), where nfeatures equals 1 for 3D or equals 'nlev' for 4D
+    '''
+    if 'lev' in da.dims:
+        arr = da.transpose('time','lat','lon','lev').values.reshape(-1,da.lev.size)
+    else:
+        arr = da.transpose('time','lat','lon').values.reshape(-1,1)
+    return arr
+
+def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
+    '''
+    Purpose: Compute training-set normalization statistics for each variable and save to a JSON file. For 4D variables (with a 'lev' dimension),
+    compute statistics using mask==1 elements. For the target variable, compute statistics on log1p(target).
+    Args:
+    - trainds(xr.Dataset): training Dataset
+    - targetvar (str): target variable name (defaults to TARGETVAR)
+    - filedir (str): output directory for saving the JSON file (defaults to FILEDIR)
+    Returns:
+    - dict[str,float]: the training set mean/std for each variable in 'trainds'
+    '''
+    stats = {}
+    mask  = reshape(trainds['mask']).astype(bool)
+    for varname in trainds.data_vars:
+        if varname=='mask':
+            continue
+        da  = trainds[varname]
+        arr = reshape(da)
+        if varname==targetvar:
+            flat = np.log1p(arr).ravel()
+        else:
+            flat = arr[mask] if ('lev' in da.dims) else arr.ravel()
+        stats[f'{varname}_mean'] = float(np.nanmean(flat))
+        stats[f'{varname}_std']  = float(np.nanstd(flat))
+    filename = 'stats.json'
+    filepath = os.path.join(filedir,filename)
+    with open(filepath,'w',encoding='utf-8') as f:
+        json.dump(stats,f)
+    logger.info(f'   Wrote statistics to {filename}')
+    return stats
+
+def normalize(da,stats,mask,targetvar=TARGETVAR):
+    '''
+    Purpose: Normalize a single xr.DataArray using provided statistics and an optional mask. Z-score normalize input variables, 
+    but if they are 4D, we multiply the normalized array by the mask to ensure pressure to gate invalid levels to 0. For the target 
+    variable, we log-transform then z-score normalize.  
+    Args:
+    - da (xr.DataArray): variable DataArray to normalize
+    - stats (dict): normalization mean/std
+    - mask (np.ndarray | None): boolean mask
+    - targetvar (str): target variable name (defaults to TARGETVAR)
+    Returns:
+    - xr.DataArray: normalized DataArray
+    '''
+    arr = reshape(da)
+    if da.name==targetvar:
+        arr  = np.log1p(arr)
+        norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
+    else:
+        norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
+        if 'lev' in da.dims:
+            norm = norm*mask
+    normda   = xr.DataArray(norm.astype(np.float32).reshape(da.shape),dims=da.dims,coords=da.coords,name=da.name)
+    longname = da.attrs.get('long_name',da.name)
+    if da.name==targetvar:
+        normda.attrs = dict(long_name=f'{longname} (log1p-transform and Z-score normalization)',units='0-1')
+    else:
+        normda.attrs = dict(long_name=f'{longname} (Z-score normalization)',units='0-1')
+    return normda
+
+def process(splitname,stats,chunksize=CHUNKSIZE,filedir=FILEDIR):
+    '''
+    Purpose: Normalize an exisiting data split using 'stats' and save as as an HDF5 file.
+    Args:
+    - splitname (str): 'train' | 'valid' | 'test'
+    - stats (dict): normalization stats computed from the training set
+    - chunksize (int): number of time steps to include for chunking (defaults to 2,208 for 3-month chunks)
+    - filedir (str): directory containing split files/output directory (defaults to FILEDIR)
+    Returns:
+    - bool: True if writing and verification succeed, otherwise False
+    '''
+    logger.info(f'   Normalizing {splitname}')
+    splitds  = load(splitname)
+    mask     = reshape(splitds['mask']).astype(bool)
+    datavars = {} 
+    for varname in splitds.data_vars:
+        if varname=='mask':
+            datavars['mask'] = splitds['mask'].astype('uint8')
+        else:
+            datavars[varname] = normalize(splitds[varname],stats,mask)
+    ds = xr.Dataset(datavars)
+    encoding = {}
+    for varname,da in ds.data_vars.items():
+        chunks = (chunksize,da.lat.size,da.lon.size,da.lev.size) if 'lev' in da.dims else (chunksize,da.lat.size,da.lon.size)
+        encoding[varname] = {
+            'compression':'lzf',
+            'shuffle':True,
+            'chunksizes':chunks,
+            'dtype':da.dtype}
+    filename = f'norm_{splitname}.h5'
+    filepath = os.path.join(filedir,filename)
+    logger.info(f'   Attempting to save {filename} ...')
+    try:
+        ds.to_netcdf(filepath,engine='h5netcdf',encoding=encoding)
+        with xr.open_dataset(filepath,engine='h5netcdf') as _:
+            pass
+        logger.info('      File write successful')
+        return True
+    except Exception:
+        logger.exception('      Failed to save or verify')
+        return False
+
+if __name__=='__main__':
+    try:
+        logger.info('Loading the training set...')
+        trainds = load('train')
+        logger.info('Computing training set normalization statistics...')
+        stats = calc_save_stats(trainds)
+        del trainds
+        logger.info('Creating normalized splits and saving...')
+        for splitname in ('train','valid','test'):
+            process(splitname,stats)
+        del stats
+        logger.info('Script completed successfully!')
+    except Exception as e:
+        logger.error(f'An unexpected error occurred: {str(e)}')

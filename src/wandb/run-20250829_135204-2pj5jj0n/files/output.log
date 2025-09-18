@@ -1,2 +1,0 @@
-2025-08-29 13:55:00 - INFO -    Ep 001 | train 0.772293 | valid 0.767483 | eval-tr(eval) 0.767605 | eval-tr(train) 0.767621 | dΔ eval 4.69e-03 | dΔ train 4.67e-03
-2025-08-29 13:57:38 - INFO -    Ep 002 | train 0.767683 | valid 0.767689 | eval-tr(eval) 0.767810 | eval-tr(train) 0.767710 | dΔ eval 1.26e-04 | dΔ train 2.68e-05
