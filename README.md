@@ -28,17 +28,23 @@ Project Organization
 ├── data/
 │   ├── raw/           <- Original immutable data
 │   ├── interim/       <- Intermediate data that has been transformed
-│   └── processed/     <- Final analysis-ready data
+│   ├── splits/        <- Training, validation, and test sets
+│   └── results/       <- Model predictions
 │
 ├── figs/              <- Generated figures/graphics 
 │
 ├── models/            
-│   ├── mlp/           <- PyTorch MLPs (NNs)
-│   └── pysr/          <- PySR symbolic regression models
+│   ├── pod/           <- POD models
+│   ├── nn/            <- NN models
+│   └── sr/            <- PySR models
 │
 ├── notebooks/         <- Jupyter notebooks for data analysis/visualizations
 │
-├── scripts/           <- Source code for use in this project     
+├── src/             
+│   ├── data/          <- Scripts for downloading, and calculating input/target terms, and splitting data
+│   ├── pod/           <- POD model architecture, training, and evalaution scripts
+│   ├── nn/            <- NN model architecture, training, and evalaution scripts
+│   └── sr/            <- TBD
 │
 └── environment.yml    <- File for reproducing the analysis environment
 ```
