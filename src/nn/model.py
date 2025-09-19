@@ -12,18 +12,12 @@ class NNModel(torch.nn.Module):
           'nlevels' per variable; for experiments with more than one variable it's the sum across variables)
         '''
         super().__init__()
-        # self.layers = torch.nn.Sequential(
-        #     torch.nn.Linear(inputsize,256), torch.nn.BatchNorm1d(256), torch.nn.GELU(),
-        #     torch.nn.Linear(256,128),       torch.nn.BatchNorm1d(128), torch.nn.GELU(),
-        #     torch.nn.Linear(128,64),        torch.nn.BatchNorm1d(64),  torch.nn.GELU(),
-        #     torch.nn.Linear(64,32),         torch.nn.BatchNorm1d(32),  torch.nn.GELU(),
-        #     torch.nn.Linear(32,1))
         self.layers = torch.nn.Sequential(
-            torch.nn.Linear(inputsize,256), torch.nn.GELU(),
-            torch.nn.Linear(256,128),       torch.nn.GELU(),
-            torch.nn.Linear(128,64),        torch.nn.GELU(),
-            torch.nn.Linear(64,32),         torch.nn.GELU(),
-            torch.nn.Linear(32,1),          torch.nn.ReLU())        
+            torch.nn.Linear(inputsize,256), torch.nn.BatchNorm1d(256), torch.nn.GELU(),
+            torch.nn.Linear(256,128),       torch.nn.BatchNorm1d(128), torch.nn.GELU(),
+            torch.nn.Linear(128,64),        torch.nn.BatchNorm1d(64),  torch.nn.GELU(),
+            torch.nn.Linear(64,32),         torch.nn.BatchNorm1d(32),  torch.nn.GELU(),
+            torch.nn.Linear(32,1))
 
     def forward(self,X):
         '''

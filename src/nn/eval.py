@@ -119,9 +119,9 @@ def predict(model,X,ytemplate,batchsize=BATCHSIZE,device=DEVICE):
     model.eval()
     with torch.no_grad():
         for (Xbatch,) in evalloader:
-            Xbatch = Xbatch.to(device)
+            Xbatch = Xbatch.to(device,non_blocking=True)
             ybatchpred = model(Xbatch)
-            ypredlist.append(ybatchpred.squeeze().cpu().numpy())
+            ypredlist.append(ybatchpred.squeeze(-1).cpu().numpy())
     ynormflat = np.concatenate(ypredlist,axis=0)
     ypredflat = denormalize(ynormflat)
     da = xr.DataArray(ypredflat.reshape(ytemplate.shape),dims=ytemplate.dims,coords=ytemplate.coords,name='predpr')

@@ -25,8 +25,14 @@ RUNCONFIGS   = CONFIGS['runs']
 TARGETVAR    = 'pr'
 EPOCHS       = 20
 BATCHSIZE    = 66240
-LEARNINGRATE = 0.005
-PATIENCE     = 3
+LEARNINGRATE = 0.001
+####################
+# PATIENCE     = 3
+WEIGHTDECAY       = 1e-4           # mild regularization
+SCHEDULERPATIENCE = 2              # patience for LR scheduler (small)
+STOPPINGPATIENCE  = 6              # larger early-stopping patience
+CLIPMAXNORM       = 1.0            # grad clipping
+####################
 CRITERION    = torch.nn.MSELoss()
 DEVICE       = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -34,21 +40,6 @@ if DEVICE=='cuda':
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.set_float32_matmul_precision('high')
-
-###############################################
-def evaluate(model,dataloader,device):
-    model.eval()
-    sumsqerr  = 0.0         
-    nelements = 0              
-    crit = torch.nn.MSELoss(reduction='sum')
-    with torch.no_grad():
-        for Xbatch,ybatch in dataloader:
-            Xbatch,ybatch = Xbatch.to(device,non_blocking=True),ybatch.to(device,non_blocking=True)
-            ybatchpred = model(Xbatch).squeeze()
-            sumsqerr  += crit(ybatchpred.squeeze(),ybatch.squeeze()).item()
-            nelements += ybatch.numel()
-    return sumsqerr/nelements if nelements>0 else float('nan')
-###############################################
     
 def reshape(da):
     '''
@@ -119,8 +110,17 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,batchsize=BATCHSIZE,device=DEV
     trainloader  = DataLoader(traindataset,batch_size=batchsize,shuffle=True,num_workers=8,persistent_workers=True,pin_memory=True,prefetch_factor=4)
     validloader  = DataLoader(validdataset,batch_size=batchsize,shuffle=False,num_workers=8,persistent_workers=True,pin_memory=True,prefetch_factor=4)
     model      = model.to(device)
-    optimizer  = torch.optim.Adam(model.parameters(),lr=learningrate)
-    scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='min',factor=0.5,patience=patience)
+    
+    ##############################################
+    # optimizer  = torch.optim.Adam(model.parameters(),lr=learningrate)
+    # scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='min',factor=0.5,patience=patience)
+
+    optimizer = torch.optim.AdamW(model.parameters(),lr=learningrate,weight_decay=WEIGHTDECAY)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='min',factor=0.5,patience=SCHEDULERPATIENCE,t
+                                                           hreshold=1e-4,cooldown=1,verbose=False)
+
+
+    #############################################
     wandb.init(
         project='Precipitation NNs',
         name=runname,
@@ -140,8 +140,12 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,batchsize=BATCHSIZE,device=DEV
             Xbatch,ybatch = Xbatch.to(device,non_blocking=True),ybatch.to(device,non_blocking=True)
             optimizer.zero_grad()
             ybatchpred = model(Xbatch)
-            loss = criterion(ybatchpred.squeeze(),ybatch.squeeze())
+            loss = criterion(ybatchpred.squeeze(-1),ybatch.squeeze(-1))
             loss.backward()
+            ##########
+            totalnorm = torch.nn.utils.clip_grad_norm_(model.parameters(),CLIPMAXNORM)
+            wandb.log({'Grad total norm before clip': float(totalnorm)})
+            ###########
             optimizer.step()
             runningloss += loss.item()*Xbatch.size(0)
         trainloss = runningloss/len(trainloader.dataset)
@@ -151,13 +155,12 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,batchsize=BATCHSIZE,device=DEV
             for Xbatch,ybatch in validloader:
                 Xbatch,ybatch = Xbatch.to(device,non_blocking=True),ybatch.to(device,non_blocking=True)
                 ybatchpred = model(Xbatch)
-                loss = criterion(ybatchpred.squeeze(),ybatch.squeeze())
+                loss = criterion(ybatchpred.squeeze(-1),ybatch.squeeze(-1))
                 runningloss += loss.item()*Xbatch.size(0)
         validloss = runningloss/len(validloader.dataset)
-        trainevalmse = evaluate(model,trainloader,device)
-        validevalmse = evaluate(model,validloader,device)
         scheduler.step(validloss)
-        if validloss<bestloss:
+        improved = validloss<bestloss
+        if improved:
             bestloss  = validloss
             bestepoch = epoch
             noimprove = 0
@@ -168,18 +171,22 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,batchsize=BATCHSIZE,device=DEV
             'Epoch':epoch,
             'Training loss':trainloss,
             'Validation loss':validloss,
-            'MSE on training set after epoch finishes':trainevalmse,
-            'MSE on validation set after epoch finishes':validevalmse,
             'Learning rate':optimizer.param_groups[0]['lr']})
-        if noimprove>=patience:
+        #################
+        # if noimprove>=patience:
+        #     break
+        if noimprove>=STPPINGPATIENCE:
             break
+        #################
     duration = time.time()-starttime
     wandb.run.summary.update({
         'Best model at epoch':bestepoch,
         'Best validation loss':bestloss,
         'Total training epochs':epoch,
         'Training duration (s)':duration,
-        'Stopped early':noimprove>=patience})
+        # 'Stopped early':noimprove>=patience
+       'Stopped early':noimprove>=STOPPINGPATIENCE,
+    })
     wandb.finish()
 
 def save(modelstate,runname,modeldir=MODELDIR):

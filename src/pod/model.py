@@ -12,6 +12,8 @@ class PODModel:
         - binmin (float): minimum boundary for the binning range (defaults to -0.6 m/s²)
         - binmax (float): maximum boundary for the binning range (defaults to 0.1 m/s²)
         - samplethresh (int): minimum number of samples required per bin to compute the bin average (defaults to 50)
+        Returns:
+        - None
         '''
         self.binwidth     = float(binwidth)
         self.binmin       = float(binmin)
