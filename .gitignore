@@ -15,6 +15,9 @@ data/results/*
 !data/external/.gitkeep
 !data/results/.gitkeep
 
+# Ignore any folder named "deprecated"
+**/deprecated/
+
 # Ignore weights and biases folder
 src/nn/wandb
 
