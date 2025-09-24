@@ -22,12 +22,12 @@ FILEDIR      = CONFIGS['paths']['filedir']
 MODELDIR     = CONFIGS['paths']['modeldir']
 RESULTSDIR   = CONFIGS['paths']['resultsdir']
 
-RUNNAME      = 'debug_xy'
+RUNNAME      = 'debug_xy_nonlin_noisy' # was 'debug_xy'
 INPUTVARS    = ['x']         
 TARGETVAR    = 'y'
 TRAINSPLIT   = 'debug_train'  
 VALIDSPLIT   = 'debug_valid'  
-EPOCHS       = 5
+EPOCHS       = 20 # was 5
 BATCHSIZE    = 64000
 LEARNINGRATE = 0.001
 PATIENCE     = 3
