@@ -1,0 +1,13 @@
+{"time":"2025-09-23T16:35:20.150736719-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-09-23T16:35:20.420017624-07:00","level":"INFO","msg":"stream: created new stream","id":"fupv1url"}
+{"time":"2025-09-23T16:35:20.420337282-07:00","level":"INFO","msg":"stream: started","id":"fupv1url"}
+{"time":"2025-09-23T16:35:20.420449659-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"fupv1url"}
+{"time":"2025-09-23T16:35:20.420489957-07:00","level":"INFO","msg":"handler: started","stream_id":"fupv1url"}
+{"time":"2025-09-23T16:35:20.420500707-07:00","level":"INFO","msg":"sender: started","stream_id":"fupv1url"}
+{"time":"2025-09-23T16:53:15.058595098-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-09-23T16:53:15.21623641-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-09-23T16:53:15.220889983-07:00","level":"INFO","msg":"stream: closing","id":"fupv1url"}
+{"time":"2025-09-23T16:53:15.221195263-07:00","level":"INFO","msg":"handler: closed","stream_id":"fupv1url"}
+{"time":"2025-09-23T16:53:15.221206905-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"fupv1url"}
+{"time":"2025-09-23T16:53:15.221232725-07:00","level":"INFO","msg":"sender: closed","stream_id":"fupv1url"}
+{"time":"2025-09-23T16:53:15.26349384-07:00","level":"INFO","msg":"stream: closed","id":"fupv1url"}

@@ -1,0 +1,14 @@
+{
+  "paths": {
+    "filedir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/splits",
+    "modeldir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/models/nn",
+    "resultsdir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/results",
+    "psfilepath":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw/ERA5_surface_pressure.nc"},
+  "runs": [
+    {"run_name":"exp_1","input_vars":["bl"],"mask":false,"description":"Experiment 1"},
+    {"run_name":"exp_2","input_vars":["cape","subsat"],"mask":false,"description":"Experiment 2"},
+    {"run_name":"exp_3","input_vars":["capeproxy"],"mask":true,"description":"Experiment 3"},
+    {"run_name":"exp_4","input_vars":["subsatproxy"],"mask":true,"description":"Experiment 4"},
+    {"run_name":"exp_5","input_vars":["capeproxy","subsatproxy"],"mask":true,"description":"Experiment 5"},
+    {"run_name":"exp_6","input_vars":["t","q"],"mask":true,"description":"Experiment 6"}]
+}
