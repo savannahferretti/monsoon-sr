@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-with open('configs.json','r',encoding='utf8') as f:
+with open('../nn/configs.json','r',encoding='utf8') as f:
     CONFIGS = json.load(f)
 FILEDIR     = CONFIGS['paths']['filedir']
 TARGETVAR   = 'pr'
@@ -19,12 +19,12 @@ CHUNKSIZE   = 2208
 
 def load(splitname,filedir=FILEDIR):
     '''
-    Purpose: Load in a given data split as an xr.Dataset.
+    Purpose: Load a data split as an xr.Dataset.
     Args:
     - splitname (str): 'train' | 'valid' | 'test'
     - filedir (str): directory containing split files (defaults to FILEDIR)
     Returns:
-    - xr.Dataset: training Dataset
+    - xr.Dataset: Dataset for the requested split
     '''
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
@@ -33,11 +33,11 @@ def load(splitname,filedir=FILEDIR):
     
 def reshape(da):
     '''
-    Purpose: Convert an xr.DataArray into a 2D NumPy array suitable for passing through the NN.
+    Purpose: Convert an xr.DataArray into a 2D NumPy array suitable for NN I/O.
     Args:
     - da (xr.DataArray): 3D or 4D DataArray
     Returns:
-    - np.ndarray: 2D array of shape (nsamples, nfeatures), where nfeatures equals 1 for 3D or equals 'nlev' for 4D
+    - np.ndarray: shape (nsamples, nfeatures); for 3D, nfeatures=1, for 4D, nfeatures equals the size of the 'lev' dimension
     '''
     if 'lev' in da.dims:
         arr = da.transpose('time','lat','lon','lev').values.reshape(-1,da.lev.size)
@@ -47,8 +47,8 @@ def reshape(da):
 
 def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
-    Purpose: Compute training-set normalization statistics for each variable and save to a JSON file. For 4D variables (with a 'lev' dimension),
-    compute statistics using mask==1 elements. For the target variable, compute statistics on log1p(target).
+    Purpose: Compute training-set statistics for each variable and save to JSON. For 4D input variables 
+    (with 'lev'), compute statistics using elements where mask==1. For the target variable, compute statistics on log1p(target).
     Args:
     - trainds(xr.Dataset): training Dataset
     - targetvar (str): target variable name (defaults to TARGETVAR)
@@ -78,13 +78,12 @@ def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
 
 def normalize(da,stats,mask,targetvar=TARGETVAR):
     '''
-    Purpose: Normalize a single xr.DataArray using provided statistics and an optional mask. Z-score normalize input variables, 
-    but if they are 4D, we multiply the normalized array by the mask to ensure pressure to gate invalid levels to 0. For the target 
-    variable, we log-transform then z-score normalize.  
+    Purpose: Z-score normalize an xr.DataArray using provided statistics and an optional mask. For 4D inputs, multiply by the 
+    level mask to gate invalid pressure levels to 0. For the target variable, we log1p-transform then normalize.  
     Args:
     - da (xr.DataArray): variable DataArray to normalize
     - stats (dict): normalization mean/std
-    - mask (np.ndarray | None): boolean mask
+    - mask (np.ndarray): boolean mask
     - targetvar (str): target variable name (defaults to TARGETVAR)
     Returns:
     - xr.DataArray: normalized DataArray
@@ -107,10 +106,10 @@ def normalize(da,stats,mask,targetvar=TARGETVAR):
 
 def process(splitname,stats,chunksize=CHUNKSIZE,filedir=FILEDIR):
     '''
-    Purpose: Normalize an exisiting data split using 'stats' and save as as an HDF5 file.
+    Purpose: Normalize an existing data split using 'stats' and save as an HDF5 file.
     Args:
     - splitname (str): 'train' | 'valid' | 'test'
-    - stats (dict): normalization stats computed from the training set
+    - stats (dict): normalization mean/std
     - chunksize (int): number of time steps to include for chunking (defaults to 2,208 for 3-month chunks)
     - filedir (str): directory containing split files/output directory (defaults to FILEDIR)
     Returns:

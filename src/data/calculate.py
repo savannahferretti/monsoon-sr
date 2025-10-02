@@ -46,20 +46,21 @@ def create_p_array(da):
     p = da.lev.expand_dims({'time':da.time,'lat':da.lat,'lon':da.lon}).transpose('lev','time','lat','lon')
     return p
 
-def regrid_and_resample(da,gridtarget,frequency='h'):
+def regrid_and_resample(da,gridtarget,method='conservative_normed'):
     '''
-    Purpose: Regrid an xr.DataArray to a target latitude-longitude grid and then resample in time by taking the first value within each time bin.
+    Purpose: Compute a centered hourly mean (uses the two half-hour samples that straddle each hour; falls back to 
+    one at boundaries) and then regrid to a target latitude–longitude grid.
     Args:
     - da (xr.DataArray): input DataArray
     - gridtarget (xr.DataArray): DataArray with target 'lat' and 'lon' for regridding
-    - frequency (str): resampling frequency (defaults to 'h' for hourly)
+    - method (str): 'bilinear' | 'conservative' | 'conservative_normed' | 'patch' | 'nearest_s2d' | 'nearest_d2s' (defaults to 'conservative_normed')
     Returns:
-    - xr.DataArray: regridded and time-resampled DataArray
+    - xr.DataArray: DataArray regridded to the target grid at on-the-hour timestamps
     '''
-    regridder = xesmf.Regridder(da,gridtarget,method='bilinear')
+    da = da.rolling(time=2,center=True,min_periods=1).mean()
+    da = da.sel(time=da.time.dt.minute==0)
+    regridder = xesmf.Regridder(da,gridtarget,method=method)
     da = regridder(da,keep_attrs=True)
-    da.coords['time'] = da.time.dt.floor(frequency) 
-    da = da.groupby('time').first()
     return da
     
 def calc_es(t):
@@ -263,15 +264,15 @@ def save(ds,savedir=SAVEDIR):
     encoding  = (
         {vardata:{'dtype':'float32'} for vardata in ds.data_vars}
         | {coord:{'dtype':'float32'} for coord in ('lat','lon','lev') if coord in ds.coords})
-    logger.info(f'Attempting to save {filename}...')   
+    logger.info(f'   Attempting to save {filename}...')   
     try:
         ds.to_netcdf(filepath,engine='h5netcdf',encoding=encoding)
         with xr.open_dataset(filepath,engine='h5netcdf') as _:
             pass
-        logger.info('   File write successful')
+        logger.info('      File write successful')
         return True
     except Exception:
-        logger.exception('   Failed to save or verify')
+        logger.exception('      Failed to save or verify')
         return False
 
 if __name__=='__main__':
@@ -331,9 +332,9 @@ if __name__=='__main__':
             results['q'].append(qchunk)
             del blchunk,capechunk,subsatchunk,capeproxychunk,subsatproxychunk,tchunk,qchunk
         del ps,t,q
-        logger.info('Concatenating results and saving...')
+        logger.info('Creating datasets...')
         dslist = [
-            dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/day'),
+            dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/hr'),
             dataset(xr.concat(results['bl'],dim='time'),'bl','Average buoyancy in the lower troposphere','m/s²'),
             dataset(xr.concat(results['cape'],dim='time'),'cape','Undilute buoyancy in the lower troposphere','K'),
             dataset(xr.concat(results['subsat'],dim='time'),'subsat','Lower free-tropospheric subsaturation','K'),
@@ -341,6 +342,7 @@ if __name__=='__main__':
             dataset(xr.concat(results['subsatproxy'],dim='time'),'subsatproxy','Saturated θₑ(p) - θₑ(p)','K'), 
             dataset(xr.concat(results['t'],dim='time'),'t','Air temperature','K'),
             dataset(xr.concat(results['q'],dim='time'),'q','Specific humidity','kg/kg')]
+        logger.info('Saving datasets...')
         for ds in dslist:
             save(ds)
             del ds

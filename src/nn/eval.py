@@ -27,11 +27,11 @@ BATCHSIZE   = 33120
 
 def reshape(da):
     '''
-    Purpose: Convert an xr.DataArray into a 2D NumPy array suitable for passing through the NN.
+    Purpose: Convert an xr.DataArray into a 2D NumPy array suitable for NN I/O.
     Args:
     - da (xr.DataArray): 3D or 4D DataArray
     Returns:
-    - np.ndarray: 2D array of shape (nsamples, nfeatures), where nfeatures equals 1 for 3D or equals 'nlev' for 4D
+    - np.ndarray: shape (nsamples, nfeatures); for 3D, nfeatures=1, for 4D, nfeatures equals the size of the 'lev' dimension
     '''
     if 'lev' in da.dims:
         arr = da.transpose('time','lat','lon','lev').values.reshape(-1,da.lev.size)

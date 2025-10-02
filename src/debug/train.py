@@ -22,7 +22,7 @@ FILEDIR      = CONFIGS['paths']['filedir']
 MODELDIR     = CONFIGS['paths']['modeldir']
 RESULTSDIR   = CONFIGS['paths']['resultsdir']
 
-RUNNAME      = 'debug_xy_nonlin_noisy' # was 'debug_xy'
+RUNNAME      = 'debug'
 INPUTVARS    = ['x']         
 TARGETVAR    = 'y'
 TRAINSPLIT   = 'debug_train'  

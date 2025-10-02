@@ -90,11 +90,12 @@ def standardize(da):
     da = da.sortby(targetdims).transpose(*targetdims)   
     return da
     
-def subset(da,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE):
+def subset(da,halo=0,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE):
     '''
     Purpose: Subset an xr.DataArray by time (years/months), latitude/longitude ranges, and, if present, by pressure levels.
     Args:
     - da (xr.DataArray): input DataArray
+    - halo (int): number of grid cells to include beyond each edge; useful for regridding (defaults to 0, which disables the halo)
     - years (list[int]): years to include (defaults to YEARS)
     - months (list[int]): months to include (defaults to MONTHS)
     - latrange (tuple[float,float]): minimum/maximum latitude (defaults to LATRANGE)
@@ -104,9 +105,20 @@ def subset(da,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levr
     - xr.DataArray: subsetted DataArray
     ''' 
     da = da.sel(time=(da.time.dt.year.isin(years))&(da.time.dt.month.isin(months)))
-    da = da.sel(lat=slice(*latrange),lon=slice(*lonrange))
+    if halo:
+        latpad = halo*float(np.abs(np.median(np.diff(da.lat.values))))
+        lonpad = halo*float(np.abs(np.median(np.diff(da.lon.values))))
+        latmin = max(float(da.lat.min()),latrange[0]-latpad)
+        latmax = min(float(da.lat.max()),latrange[1]+latpad)
+        lonmin = max(float(da.lon.min()),lonrange[0]-lonpad)
+        lonmax = min(float(da.lon.max()),lonrange[1]+lonpad)
+    else:
+        latmin,latmax = latrange[0],latrange[1]
+        lonmin,lonmax = lonrange[0],lonrange[1]
+    da = da.sel(lat=slice(latmin,latmax),lon=slice(lonmin,lonmax))
     if 'lev' in da.dims:
-        da = da.sel(lev=slice(*levrange))
+        levmin,levmax = levrange[0],levrange[1]
+        da = da.sel(lev=slice(levmin,levmax))
     return da
 
 def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
@@ -133,7 +145,7 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     logger.info(f'   {longname} size: {ds.nbytes*1e-9:.2f} GB')
     return ds
 
-def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE,author=AUTHOR,email=EMAIL):
+def process(da,shortname,longname,units,halo=0,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE,author=AUTHOR,email=EMAIL):
     '''
     Purpose: Convert an xr.DataArray into an xr.Dataset by applying the standardize(), subset(), and dataset() functions in sequence.
     Args:
@@ -141,6 +153,7 @@ def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRA
     - shortname (str): variable name (abbreviation)
     - longname (str): variable long name/description 
     - units (str): variable units
+    - halo (int): number of grid cells to include beyond each edge; useful for regridding (defaults to 0, which disables the halo)
     - years (list[int]): years to include (defaults to YEARS)
     - months (list[int]): months to include (defaults to MONTHS)
     - latrange (tuple[float,float]): minimum/maximum latitude (defaults to LATRANGE)
@@ -152,7 +165,7 @@ def process(da,shortname,longname,units,years=YEARS,months=MONTHS,latrange=LATRA
     - xr.Dataset: processed Dataset
     ''' 
     da = standardize(da)
-    da = subset(da,years,months,latrange,lonrange,levrange)
+    da = subset(da,halo,years,months,latrange,lonrange,levrange)
     ds = dataset(da,shortname,longname,units,author,email)
     return ds
 
@@ -170,35 +183,36 @@ def save(ds,savedir=SAVEDIR):
     longname  = ds[shortname].attrs['long_name']
     filename  = re.sub(r'\s+','_',longname)+'.nc'
     filepath  = os.path.join(savedir,filename)
-    logger.info(f'Attempting to save {filename}...')   
+    logger.info(f'   Attempting to save {filename}...')   
     try:
         ds.to_netcdf(filepath,engine='h5netcdf')
         with xr.open_dataset(filepath,engine='h5netcdf') as _:
             pass
-        logger.info('   File write successful')
+        logger.info('      File write successful')
         return True
     except Exception:
-        logger.exception('   Failed to save or verify')
+        logger.exception('      Failed to save or verify')
         return False
 
 if __name__=='__main__':
     try:
         logger.info('Retrieving ERA5 and IMERG data...')
-        era5  = retrieve_era5()
+        # era5  = retrieve_era5()
         imerg = retrieve_imerg()
         logger.info('Extracting variable data...')
-        prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)*24
-        psdata = era5.surface_pressure/100
-        tdata  = era5.temperature
-        qdata  = era5.specific_humidity
-        del era5,imerg
+        prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)
+        # psdata = era5.surface_pressure/100
+        # tdata  = era5.temperature
+        # qdata  = era5.specific_humidity
+        del imerg #era5,imerg
         logger.info('Creating datasets...')
         dslist = [
-            process(prdata,'pr','IMERG V06 precipitation rate','mm/day'),
-            process(psdata,'ps','ERA5 surface pressure','hPa'),
-            process(tdata,'t','ERA5 air temperature','K'),
-            process(qdata,'q','ERA5 specific humidity','kg/kg')]
-        del prdata,psdata,tdata,qdata
+            process(prdata,'pr','IMERG V06 precipitation rate','mm/hr',halo=2),
+            # process(psdata,'ps','ERA5 surface pressure','hPa',halo=0),
+            # process(tdata,'t','ERA5 air temperature','K',halo=0),
+            # process(qdata,'q','ERA5 specific humidity','kg/kg',halo=0)
+        ]
+        del prdata #,psdata,tdata,qdata
         logger.info('Saving datasets...')
         for ds in dslist:
             save(ds)

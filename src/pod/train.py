@@ -51,12 +51,15 @@ def fit(model,Xtrain,ytrain):
     Returns:
     - None: the same model instance with 'binmeans' and 'nparams' populated
     '''
-    Xflat = Xtrain.values.ravel()
-    yflat = ytrain.values.ravel()
-    idx  = np.digitize(Xflat,model.binedges)-1
-    mask = (idx>=0)&(idx<model.nbins)
-    counts = np.bincount(idx[mask],minlength=model.nbins).astype(np.int32)
-    sums   = np.bincount(idx[mask],weights=yflat[mask],minlength=model.nbins).astype(np.float32)
+    Xflat  = Xtrain.values.ravel()
+    yflat  = ytrain.values.ravel()
+    finite = np.isfinite(Xflat)&np.isfinite(yflat)
+    Xflat  = Xflat[finite]
+    yflat  = yflat[finite]
+    binidxs = np.digitize(Xflat,model.binedges)-1
+    inrange = (binidxs>=0)&(binidxs<model.nbins)
+    counts = np.bincount(binidxs[inrange],minlength=model.nbins).astype(np.int64)
+    sums   = np.bincount(binidxs[inrange],weights=yflat[inrange],minlength=model.nbins).astype(np.float32)
     with np.errstate(divide='ignore',invalid='ignore'):
         means = sums/counts
     means[counts<model.samplethresh] = np.nan
