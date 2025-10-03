@@ -51,11 +51,11 @@ def fit(model,Xtrain,ytrain):
     Returns:
     - None: the same model instance with 'binmeans' and 'nparams' populated
     '''
-    Xflat  = Xtrain.values.ravel()
-    yflat  = ytrain.values.ravel()
-    finite = np.isfinite(Xflat)&np.isfinite(yflat)
-    Xflat  = Xflat[finite]
-    yflat  = yflat[finite]
+    Xflat = Xtrain.values.ravel()
+    yflat = ytrain.values.ravel()
+    mask  = np.isfinite(Xflat)&np.isfinite(yflat)
+    Xflat = Xflat[mask]
+    yflat = yflat[mask]
     binidxs = np.digitize(Xflat,model.binedges)-1
     inrange = (binidxs>=0)&(binidxs<model.nbins)
     counts = np.bincount(binidxs[inrange],minlength=model.nbins).astype(np.int64)

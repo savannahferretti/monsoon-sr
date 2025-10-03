@@ -38,8 +38,13 @@ def load(splitname,inputvar=INPUTVAR,targetvar=TARGETVAR,filedir=FILEDIR):
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
     evalds   = xr.open_dataset(filepath,engine='h5netcdf')[[inputvar,targetvar]]
-    X,y = evalds[inputvar].load(),evalds[targetvar].load()
-    return X,y
+    X,y = evalds[inputvar],evalds[targetvar]
+    ######################
+    rainmask = y>0
+    X = X.where(rainmask)
+    y = y.where(rainmask)
+    #####################
+    return X.load(),y.load()
 
 def fetch(runname,modeldir=MODELDIR):
     '''
@@ -90,7 +95,9 @@ def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
     - bool: True if writing and verification succeed, otherwise False
     '''
     os.makedirs(resultsdir,exist_ok=True)
-    filename = f'pod_{runname}_{splitname}_pr.nc'
+    ##############################
+    filename = f'pod_{runname}_{splitname}_pr_rainy.nc'
+    ##############################
     filepath = os.path.join(resultsdir,filename)
     logger.info(f'   Attempting to save {filename}...')
     try:
