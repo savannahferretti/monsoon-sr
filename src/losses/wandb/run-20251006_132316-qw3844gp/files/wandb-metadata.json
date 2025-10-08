@@ -1,0 +1,84 @@
+{
+  "os":  "Linux-5.14.21-150500.55.97_13.0.78-cray_shasta_c-x86_64-with-glibc2.31",
+  "python":  "CPython 3.10.18",
+  "startedAt":  "2025-10-06T20:23:16.477725Z",
+  "program":  "/global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/losses/train.py",
+  "codePath":  "src/losses/train.py",
+  "codePathLocal":  "train.py",
+  "git":  {
+    "remote":  "https://github.com/savannahferretti/monsoon-sr.git",
+    "commit":  "b7c152387c77d15633c5ab18458fb40974b29f5a"
+  },
+  "email":  "savannah.ferretti@uci.edu",
+  "root":  "/global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/losses",
+  "host":  "nid001116",
+  "executable":  "/global/homes/s/sferrett/.conda/envs/monsoon-sr/bin/python",
+  "cpu_count":  64,
+  "cpu_count_logical":  128,
+  "gpu":  "NVIDIA A100-SXM4-40GB",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "134862798848",
+      "used":  "3160637440"
+    }
+  },
+  "memory":  {
+    "total":  "269725597696"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA A100-SXM4-40GB",
+      "memoryTotal":  "42949672960",
+      "cudaCores":  6912,
+      "architecture":  "Ampere",
+      "uuid":  "GPU-63cc18b3-b1ca-7d88-0c7f-1d332ec07d76"
+    }
+  ],
+  "cudaVersion":  "12.4",
+  "slurm":  {
+    "cluster_name":  "perlmutter",
+    "cpus_on_node":  "32",
+    "cpus_per_task":  "32",
+    "gpus_on_node":  "1",
+    "gtids":  "0",
+    "job_account":  "m4334_g",
+    "job_cpus_per_node":  "32",
+    "job_end_time":  "1759794975",
+    "job_gid":  "109311",
+    "job_gpus":  "1",
+    "job_id":  "43642765",
+    "job_licenses":  "u1:1",
+    "job_name":  "jupyter",
+    "job_nodelist":  "nid001116",
+    "job_num_nodes":  "1",
+    "job_partition":  "shared_urgent_gpu_ss11",
+    "job_qos":  "gpu_shared_jupyter",
+    "job_start_time":  "1759773375",
+    "job_uid":  "109311",
+    "job_user":  "sferrett",
+    "jobid":  "43642765",
+    "localid":  "0",
+    "mem_per_cpu":  "1796",
+    "nnodes":  "1",
+    "nodeid":  "0",
+    "nodelist":  "nid001116",
+    "nprocs":  "1",
+    "ntasks":  "1",
+    "ntasks_per_node":  "1",
+    "oom_kill_step":  "0",
+    "prio_process":  "0",
+    "procid":  "0",
+    "script_context":  "prolog_task",
+    "stepmgr":  "nid001116",
+    "submit_dir":  "/global/u1/s/sferrett",
+    "submit_host":  "login19",
+    "task_pid":  "1927360",
+    "tasks_per_node":  "1",
+    "topology_addr":  "nid001116",
+    "topology_addr_pattern":  "node",
+    "tres_bind":  "gres/gpu:per_task:1",
+    "tres_per_task":  "cpu=32,gres/gpu=1"
+  },
+  "writerId":  "7mrm1z4kjbbxu934wyy9orydd24gozxj"
+}

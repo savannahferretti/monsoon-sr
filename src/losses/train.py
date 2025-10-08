@@ -5,6 +5,7 @@ import json
 import time
 import torch
 import wandb
+import random
 import logging
 import warnings
 import numpy as np
@@ -12,7 +13,7 @@ import xarray as xr
 from models import PODModel,NNModel,TweedieDevianceLoss
 from torch.utils.data import TensorDataset,DataLoader
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
+logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
@@ -22,17 +23,23 @@ FILEDIR     = CONFIGS['paths']['filedir']
 MODELDIR    = CONFIGS['paths']['modeldir']
 RUNCONFIGS  = CONFIGS['runs']
 
-PRTHRESH     = 0.0
+PRTHRESH     = 0.01
 EPOCHS       = 20
-BATCHSIZE    = 66240
-LEARNINGRATE = 5e-4
-PATIENCE     = 3
+BATCHSIZE    = 298080
+LEARNINGRATE = 3e-4
+PATIENCE     = 2
 DEVICE       = 'cuda' if torch.cuda.is_available() else 'cpu'
+RANDOMSEED   = 42
 
+random.seed(RANDOMSEED)
+np.random.seed(RANDOMSEED)
+torch.manual_seed(RANDOMSEED)
 if DEVICE=='cuda':
+    torch.cuda.manual_seed_all(RANDOMSEED)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.set_float32_matmul_precision('high')
+torch.backends.cudnn.benchmark = False
 
 def load_pod(filtered,inputvar='bl',targetvar='pr',prthresh=PRTHRESH,filedir=FILEDIR):
     dslist = []
@@ -87,19 +94,10 @@ def fit_pod(model,runname,Xtrain,ytrain,modeldir=MODELDIR):
     with np.errstate(divide='ignore',invalid='ignore'):
         means = sums/counts
     badbins  = (counts<model.samplethresh)|~np.isfinite(means)
-    goodbins = ~badbins
-    if np.any(goodbins):
-        idx     = np.arange(model.nbins)
-        goodidx = np.where(goodbins)[0]
-        if goodidx.size==1:
-            means[badbins] = means[goodidx[0]].astype(np.float32)
-        else:
-            means[badbins] = np.interp(idx[badbins],idx[goodbins],means[goodbins]).astype(np.float32)
-    else:
-        globalmean = float(yflat.mean()) if yflat.size else 0.0
-        means[:]   = globalmean
-    model.binmeans = means.astype(np.float32)
-    model.nparams  = model.nbins
+    means    = means.astype(np.float32)
+    means[badbins]   = np.nan
+    model.binmeans   = means
+    model.nparams    = int(np.isfinite(means).sum())
     save_pod(model,runname)
     return None
 
@@ -135,9 +133,19 @@ def save_nn(modelstate,runname,modeldir=MODELDIR):
 
 def fit_nn(model,runname,criterion,Xtrain,ytrain,Xvalid,yvalid,batchsize=BATCHSIZE,device=DEVICE,learningrate=LEARNINGRATE,patience=PATIENCE,epochs=EPOCHS,modeldir=MODELDIR):
     traindataset = TensorDataset(Xtrain,ytrain)
-    validdataset = TensorDataset(Xvalid,yvalid)
-    trainloader  = DataLoader(traindataset,batch_size=batchsize,shuffle=True,num_workers=8,persistent_workers=True,pin_memory=True)
-    validloader  = DataLoader(validdataset,batch_size=batchsize,shuffle=False,num_workers=8,persistent_workers=True,pin_memory=True)
+    validdataset = TensorDataset(Xvalid,yvalid)    
+    def _dataloader_worker_args(device):
+        cpucount = os.cpu_count() or 0
+        nworkers = min(32,cpucount) if cpucount else 0
+        kwargs = {'num_workers':nworkers,'persistent_workers':bool(nworkers),'pin_memory':device=='cuda'}
+        if device=='cuda':
+            kwargs['pin_memory_device'] = 'cuda'
+        if kwargs['num_workers']>0:
+            kwargs['prefetch_factor'] = 4
+        return kwargs
+    kwargs      = _dataloader_worker_args(device)
+    trainloader = DataLoader(traindataset,batch_size=batchsize,shuffle=True,**kwargs)
+    validloader = DataLoader(validdataset,batch_size=batchsize,shuffle=False,**kwargs)
     model     = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(),lr=learningrate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='min',factor=0.5,patience=patience)
@@ -185,10 +193,10 @@ def fit_nn(model,runname,criterion,Xtrain,ytrain,Xvalid,yvalid,batchsize=BATCHSI
         else:
             noimprove += 1
         wandb.log({
-            'Epoch':epoch,
             'Training loss':trainloss,
             'Validation loss':validloss,
-            'Learning rate':optimizer.param_groups[0]['lr']})
+            'Learning rate':optimizer.param_groups[0]['lr']},
+                  step=epoch)
         if noimprove>=patience:
             break
     duration = time.time()-starttime

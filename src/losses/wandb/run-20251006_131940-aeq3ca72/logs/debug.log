@@ -1,0 +1,23 @@
+2025-10-06 13:19:40,440 INFO    MainThread:1966015 [wandb_init.py:setup_run_log_directory():703] Logging user logs to /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/losses/wandb/run-20251006_131940-aeq3ca72/logs/debug.log
+2025-10-06 13:19:40,442 INFO    MainThread:1966015 [wandb_init.py:setup_run_log_directory():704] Logging internal logs to /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/losses/wandb/run-20251006_131940-aeq3ca72/logs/debug-internal.log
+2025-10-06 13:19:40,442 INFO    MainThread:1966015 [wandb_init.py:init():830] calling init triggers
+2025-10-06 13:19:40,443 INFO    MainThread:1966015 [wandb_init.py:init():835] wandb.init called with sweep_config: {}
+config: {'criterion': 'TweedieDevianceLoss', 'epochs': 10, 'batch_size': 512000, 'initial_lr': 0.001, 'patience': 10, '_wandb': {}}
+2025-10-06 13:19:40,443 INFO    MainThread:1966015 [wandb_init.py:init():871] starting backend
+2025-10-06 13:19:40,444 INFO    MainThread:1966015 [wandb_init.py:init():874] sending inform_init request
+2025-10-06 13:19:40,452 INFO    MainThread:1966015 [wandb_init.py:init():882] backend started and connected
+2025-10-06 13:19:40,455 INFO    MainThread:1966015 [wandb_init.py:init():953] updated telemetry
+2025-10-06 13:19:40,542 INFO    MainThread:1966015 [wandb_init.py:init():977] communicating run to backend with 90.0 second timeout
+2025-10-06 13:19:40,935 INFO    MainThread:1966015 [wandb_init.py:init():1029] starting run threads in backend
+2025-10-06 13:19:41,999 INFO    MainThread:1966015 [wandb_run.py:_console_start():2458] atexit reg
+2025-10-06 13:19:42,000 INFO    MainThread:1966015 [wandb_run.py:_redirect():2306] redirect: wrap_raw
+2025-10-06 13:19:42,000 INFO    MainThread:1966015 [wandb_run.py:_redirect():2375] Wrapping output streams.
+2025-10-06 13:19:42,000 INFO    MainThread:1966015 [wandb_run.py:_redirect():2398] Redirects installed.
+2025-10-06 13:19:42,002 INFO    MainThread:1966015 [wandb_init.py:init():1075] run started, returning control to user process
+2025-10-06 13:22:15,815 INFO    MainThread:1966015 [wandb_run.py:_finish():2224] finishing run savannah-research/MSE vs. Tweedie NNs/aeq3ca72
+2025-10-06 13:22:15,816 INFO    MainThread:1966015 [wandb_run.py:_atexit_cleanup():2423] got exitcode: 0
+2025-10-06 13:22:15,817 INFO    MainThread:1966015 [wandb_run.py:_restore():2405] restore
+2025-10-06 13:22:15,817 INFO    MainThread:1966015 [wandb_run.py:_restore():2411] restore done
+2025-10-06 13:22:16,407 INFO    MainThread:1966015 [wandb_run.py:_footer_history_summary_info():3903] rendering history
+2025-10-06 13:22:16,408 INFO    MainThread:1966015 [wandb_run.py:_footer_history_summary_info():3935] rendering summary
+2025-10-06 13:22:16,409 INFO    MainThread:1966015 [wandb_run.py:_footer_sync_info():3864] logging synced files

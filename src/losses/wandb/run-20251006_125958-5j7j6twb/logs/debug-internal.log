@@ -1,0 +1,8 @@
+{"time":"2025-10-06T12:59:58.223008623-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-10-06T12:59:58.481305952-07:00","level":"INFO","msg":"stream: created new stream","id":"5j7j6twb"}
+{"time":"2025-10-06T12:59:58.481601794-07:00","level":"INFO","msg":"stream: started","id":"5j7j6twb"}
+{"time":"2025-10-06T12:59:58.481636542-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"5j7j6twb"}
+{"time":"2025-10-06T12:59:58.481655789-07:00","level":"INFO","msg":"handler: started","stream_id":"5j7j6twb"}
+{"time":"2025-10-06T12:59:58.481663835-07:00","level":"INFO","msg":"sender: started","stream_id":"5j7j6twb"}
+{"time":"2025-10-06T13:00:44.489515155-07:00","level":"ERROR","msg":"HTTP error","status":404,"method":"POST","url":"https://api.wandb.ai/files/savannah-research/MSE%20vs.%20Tweedie%20NNs/5j7j6twb/file_stream"}
+{"time":"2025-10-06T13:00:44.489950429-07:00","level":"ERROR+4","msg":"filestream: fatal error: filestream: failed to upload: 404 Not Found path=files/savannah-research/MSE vs. Tweedie NNs/5j7j6twb/file_stream: {\"error\":\"project savannah-research/MSE vs. Tweedie NNs not found while streaming file\"}"}

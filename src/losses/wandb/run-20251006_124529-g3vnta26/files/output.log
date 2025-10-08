@@ -1,0 +1,6 @@
+2025-10-06 12:45:32 - INFO - Using fast path: full dataset resident on GPU.
+2025-10-06 12:45:35 - INFO -    Attempting to save nn_tweedie_filtered.pth...
+2025-10-06 12:45:35 - INFO -       File write successful
+2025-10-06 12:45:38 - INFO -    Attempting to save nn_tweedie_filtered.pth...
+2025-10-06 12:45:38 - INFO -       File write successful
+2025-10-06 12:45:48 - INFO - Early stopping.

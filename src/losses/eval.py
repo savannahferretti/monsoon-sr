@@ -23,8 +23,8 @@ MODELDIR    = CONFIGS['paths']['modeldir']
 RESULTSDIR  = CONFIGS['paths']['resultsdir']
 RUNCONFIGS  = CONFIGS['runs']
 
-PRTHRESH  = 0.0
-BATCHSIZE = 66240
+PRTHRESH  = 0.01
+BATCHSIZE = 72864
 DEVICE    = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 if DEVICE=='cuda':
@@ -56,6 +56,7 @@ def fetch_pod(runname,modeldir=MODELDIR):
         model.bincenters = data['bincenters'].astype(np.float32)
         model.binmeans   = data['binmeans'].astype(np.float32)
         model.nparams    = int(data['nparams'])
+        model.nbins      = int(model.bincenters.size)
     return model
 
 def predict_pod(model,X,template):

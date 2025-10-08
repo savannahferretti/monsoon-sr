@@ -14,18 +14,37 @@ class PODModel:
         self.samplethresh = int(samplethresh)
         self.binmeans     = None 
         self.nparams      = 0   
+        self.nearestidx   = None
+    def build_nearest_index(self):
+        means  = self.binmeans
+        nbins  = self.nbins
+        idxs   = np.arange(nbins)
+        finite = np.isfinite(means)
+        if not np.any(finite):
+            self.nearestidx = None
+            return
+        left = np.where(finite,idxs,-1)
+        left = np.maximum.accumulate(left)
+        right = np.where(finite,idx,nbins)
+        right = np.minimum.accumulate(right[::-1])[::-1]
+        chooseleft = (idxs-left)<=(right-idxs)
+        nearest = np.where(left==-1,right,np.where(right==nbins,left,np.where(chooseleft,left,right)))
+        self.nearestidx = nearest.astype(np.int64)
     def forward(self,X):
         if self.binmeans is None:
             raise RuntimeError('Parameters not set; train or load a POD model first.')
+        if (self.nearestidx is None) or (self.nearestidx.size!=self.nbins):
+            self.build_nearest_index()
         Xflat   = X.values.ravel()
         binidxs = np.digitize(Xflat,self.binedges)-1
         binidxs = np.clip(binidxs,0,self.nbins-1)
-        ypred   = self.binmeans[binidxs].astype(np.float32,copy=False)
+        nearest = self.nearestidx[binidxs]
+        ypred   = self.binmeans[nearest].astype(np.float32,copy=False)
         nonfinite = ~np.isfinite(Xflat)
         if np.any(nonfinite):
             ypred[nonfinite] = np.nan
         return ypred
-
+        
 class NNModel(torch.nn.Module):
     def __init__(self,inputsize):
         super().__init__()
