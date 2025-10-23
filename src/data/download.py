@@ -64,7 +64,7 @@ def retrieve_imerg():
     except Exception:
         logger.exception('   Failed to retrieve IMERG')
         sys.exit(1)
-
+    
 def standardize(da):
     '''
     Purpose: Standardize the names, data types, and order of dimensions of an xr.DataArray.
@@ -92,7 +92,7 @@ def standardize(da):
     
 def subset(da,halo=0,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE):
     '''
-    Purpose: Subset an xr.DataArray by time (years/months), latitude/longitude ranges, and, if present, by pressure levels.
+    Purpose: Subset an xr.DataArray by latitude/longitude ranges, and, if present, by time (years/months) and pressure levels.
     Args:
     - da (xr.DataArray): input DataArray
     - halo (int): number of grid cells to include beyond each edge; useful for regridding (defaults to 0, which disables the halo)
@@ -104,7 +104,8 @@ def subset(da,halo=0,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRAN
     Returns:
     - xr.DataArray: subsetted DataArray
     ''' 
-    da = da.sel(time=(da.time.dt.year.isin(years))&(da.time.dt.month.isin(months)))
+    if 'time' in da.dims:
+        da = da.sel(time=(da.time.dt.year.isin(years))&(da.time.dt.month.isin(months)))
     if halo:
         latpad = halo*float(np.abs(np.median(np.diff(da.lat.values))))
         lonpad = halo*float(np.abs(np.median(np.diff(da.lon.values))))
@@ -136,13 +137,16 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     '''    
     ds = da.to_dataset(name=shortname)
     ds[shortname].attrs = dict(long_name=longname,units=units)
-    ds.time.attrs = dict(long_name='Time')
-    ds.lat.attrs  = dict(long_name='Latitude',units='°N')
-    ds.lon.attrs  = dict(long_name='Longitude',units='°E')
-    if 'lev' in ds.dims:
-        ds.lev.attrs = dict(long_name='Pressure level',units='hPa')
+    if 'time' in ds.coords:
+        ds.time.attrs = dict(long_name='Time')
+    if 'lat' in ds.coords:
+        ds.lat.attrs  = dict(long_name='Latitude',units='°N')
+    if 'lon' in ds.coords:
+        ds.lon.attrs  = dict(long_name='Longitude',units='°E')
+    if 'lev' in ds.coords:
+        ds.lev.attrs  = dict(long_name='Pressure level',units='hPa')
     ds.attrs = dict(history=f'Created on {datetime.today().strftime("%Y-%m-%d")} by {author} ({email})')
-    logger.info(f'   {longname} size: {ds.nbytes*1e-9:.2f} GB')
+    logger.info(f'   {longname} size: {ds.nbytes*1e-9:.3f} GB')
     return ds
 
 def process(da,shortname,longname,units,halo=0,years=YEARS,months=MONTHS,latrange=LATRANGE,lonrange=LONRANGE,levrange=LEVRANGE,author=AUTHOR,email=EMAIL):
@@ -197,22 +201,23 @@ def save(ds,savedir=SAVEDIR):
 if __name__=='__main__':
     try:
         logger.info('Retrieving ERA5 and IMERG data...')
-        # era5  = retrieve_era5()
+        era5  = retrieve_era5()
         imerg = retrieve_imerg()
         logger.info('Extracting variable data...')
         prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)
-        # psdata = era5.surface_pressure/100
-        # tdata  = era5.temperature
-        # qdata  = era5.specific_humidity
-        del imerg #era5,imerg
+        psdata = era5.surface_pressure/100
+        tdata  = era5.temperature
+        qdata  = era5.specific_humidity
+        lfdata = era5.land_sea_mask
+        del era5,imerg
         logger.info('Creating datasets...')
         dslist = [
             process(prdata,'pr','IMERG V06 precipitation rate','mm/hr',halo=2),
-            # process(psdata,'ps','ERA5 surface pressure','hPa',halo=0),
-            # process(tdata,'t','ERA5 air temperature','K',halo=0),
-            # process(qdata,'q','ERA5 specific humidity','kg/kg',halo=0)
-        ]
-        del prdata #,psdata,tdata,qdata
+            process(psdata,'ps','ERA5 surface pressure','hPa',halo=0),
+            process(tdata,'t','ERA5 air temperature','K',halo=0),
+            process(qdata,'q','ERA5 specific humidity','kg/kg',halo=0),
+            process(lfdata,'lf','ERA5 land fraction','0-1',halo=0)]
+        del prdata,psdata,tdata,qdata,lfdata
         logger.info('Saving datasets...')
         for ds in dslist:
             save(ds)

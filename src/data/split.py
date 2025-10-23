@@ -4,7 +4,6 @@ import os
 import h5py
 import logging
 import warnings
-import numpy as np
 import xarray as xr
 
 logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
@@ -13,8 +12,7 @@ warnings.filterwarnings('ignore')
 
 FILEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
 SAVEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/splits'
-PSFILEPATH  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw/ERA5_surface_pressure.nc'
-INPUTVARS   = ['bl','cape','subsat','capeproxy','subsatproxy','t','q']
+INPUTVARS   = ['lf','bl','cape','subsat','capeproxy','subsatproxy','t','q','levmask']
 TARGETVAR   = 'pr'
 TRAINRANGE  = ('2000','2014')
 VALIDRANGE  = ('2015','2017')
@@ -31,27 +29,10 @@ def retrieve(varname,filedir=FILEDIR):
     '''
     filename = f'{varname}.nc'
     filepath = os.path.join(filedir,filename)
-    da = xr.open_dataarray(filepath,engine='h5netcdf')
-    if 'lev' in da.dims:
-        return da.transpose('time','lat','lon','lev')
-    return da.transpose('time','lat','lon')
-
-def make_mask(refda,splitrange,psfilepath=PSFILEPATH):
-    '''
-    Purpose: Create a below-surface mask for a given split (applies to all variables with a 'lev' dimension).
-    Args:
-    - refda (xr.DataArray): any variable for this split that has a 'lev' dimension
-    - splitrange (tuple[str,str]): inclusive start/end years for the split
-    - psfilepath (str): path to ERA5 surface pressure NetCDF file (defaults to PSFILEPATH)
-    Returns:
-    - xr.DataArray: uint8 mask that is 1 where the levels exist (lev ≤ ps), and 0 otherwise
-    '''
-    pssplit    = xr.open_dataarray(psfilepath,engine='h5netcdf').sel(time=slice(*splitrange))
-    refdasplit = refda.sel(time=slice(*splitrange))
-    mask = (refdasplit.lev<=pssplit).transpose('time','lat','lon','lev').astype('uint8')
-    mask.name = 'mask'
-    return mask
-
+    da   = xr.open_dataarray(filepath,engine='h5netcdf')
+    order = tuple(dim for dim in ('time','lat','lon','lev') if dim in da.dims)
+    return da.transpose(*order) if order else da
+            
 def split(splitname,splitrange,chunksize=2208,inputvars=INPUTVARS,targetvar=TARGETVAR):
     '''
     Purpose: Assemble the inputs/target data and one shared mask for a given split into a single xr.Dataset,
@@ -70,11 +51,11 @@ def split(splitname,splitrange,chunksize=2208,inputvars=INPUTVARS,targetvar=TARG
     datavars[targetvar] = y
     levels = None
     for inputvar in inputvars:
-        da = retrieve(inputvar).sel(time=slice(*splitrange))
+        da = retrieve(inputvar)
+        if 'time' not in da.dims:
+            da = da.expand_dims(time=y.time)
+        da = da.sel(time=slice(*splitrange))
         datavars[inputvar] = da
-        if ('lev' in da.dims) and levels is None:
-            levels = da.lev.values
-            datavars['mask'] = make_mask(da,splitrange)
     ds = xr.Dataset(datavars)
     encoding = {}
     for varname,da in ds.data_vars.items():

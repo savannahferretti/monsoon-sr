@@ -4,7 +4,6 @@
     "modeldir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/models/pod",
     "resultsdir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/results"},
   "runs": [
-    {"run_name":"large_bins","bin_width":0.1,"description":"Binwidth = 0.1 m/s²"},
-    {"run_name":"medium_bins","bin_width":0.01,"description":"Binwidth = 0.01 m/s²"},
-    {"run_name":"small_bins","bin_width":0.001,"description":"Binwidth = 0.001 m/s²"}]
+    {"run_name":"single_fit","mode":"pooled","description":"Single Fit"},
+    {"run_name":"separate_fit","mode":"regional","description":"Separate Land/Ocean Fits"}]
 }

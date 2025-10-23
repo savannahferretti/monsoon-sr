@@ -4,40 +4,47 @@ import numpy as np
 
 class PODModel:
     
-    def __init__(self,binwidth,binmin=-0.6,binmax=0.1,samplethresh=50):
+    def __init__(self,mode,landthresh=0.5):
         '''
-        Purpose: Initialize a buoyancy-based POD model for precipitation prediction.
-        Args:
-        - binwidth (float): width of each BL bin (m/s²)
-        - binmin (float): minimum boundary for the binning range (defaults to -0.6 m/s²)
-        - binmax (float): maximum boundary for the binning range (defaults to 0.1 m/s²)
-        - samplethresh (int): number of samples in a bin required to compute the bin average, otherwise NaN (defaults to 50)
+        Purpose: Initialize a ramp-based POD model for precipitation prediction using Eq. 8 from Ahmed F., Adames Á.F., & 
+        Neelin J.D. (2020), J. Atmos. Sci.
+        Args: 
+        - mode (str): 'pooled' (single ramp) | 'regional' (separate land/ocean ramps)
+        - landthresh (float): routing threshold for 'regional' mode, where land occurs ≥ 'landthresh' (defaults to 0.5)
         Returns:
         - None
         '''
-        self.binwidth     = float(binwidth)
-        self.binmin       = float(binmin)
-        self.binmax       = float(binmax)
-        self.binedges     = np.arange(self.binmin,self.binmax+self.binwidth,self.binwidth,dtype=np.float32)
-        self.bincenters   = ((self.binedges[:-1]+self.binedges[1:])*0.5).astype(np.float32)
-        self.nbins        = int(self.bincenters.size)
-        self.samplethresh = int(samplethresh)
-        self.binmeans     = None 
-        self.nparams      = 0   
+        self.mode         = str(mode)
+        self.landthresh   = float(landthresh)
+        self.alphapooled  = np.nan
+        self.blcritpooled = np.nan
+        self.alphaland    = np.nan
+        self.blcritland   = np.nan
+        self.alphaocean   = np.nan
+        self.blcritocean  = np.nan
+        self.nparams      = 0
 
-    def forward(self,X):
+    def forward(self,x,lf=None):
         '''
-        Purpose: Forward pass through the POD model.
+        Purpose: Forward pass through the POD ramp. 
         Args:
-        - X (xr.DataArray): input 3D BL DataArray
+        - x (xr.DataArray): input 3D BL DataArray
+        - lf (xr.DataArray): land fraction for routing in 'regional' mode (same shape as 'x')
         Returns:
-        - np.ndarray: predicted prediction array of shape (X.size,)
+        - np.ndarray: predicted prediction array of shape (x.size,)
         '''
-        if self.binmeans is None:
-            raise RuntimeError('Parameters not set; train or load a POD model first.')
-        Xflat   = X.values.ravel()
-        binidxs = np.digitize(Xflat,self.binedges)-1
-        ypred   = np.full(Xflat.shape,np.nan,dtype=np.float32)
-        valid   = (binidxs>=0)&(binidxs<self.nbins)&np.isfinite(Xflat)
-        ypred[valid] = self.binmeans[binidxs[valid]]
+        xflat  = x.values.ravel()
+        ypred  = np.full(xflat.shape,np.nan,dtype=np.float32)
+        finite = np.isfinite(xflat)
+        if self.mode=='pooled':
+            ypred[finite] = self.alphapooled*np.maximum(0.0,xflat[finite]-self.blcritpooled).astype(np.float32)
+        elif self.mode=='regional':
+            if lf is None:
+                raise ValueError('Regional mode requires `lf` for routing.')
+            landmask      = (lf.values.ravel()[finite]>=self.landthresh)
+            ypredland     = self.alphaland*np.maximum(0.0,xflat[finite]-self.blcritland)
+            ypredocean    = self.alphaocean*np.maximum(0.0,xflat[finite]-self.blcritocean)
+            ypred[finite] = np.where(landmask,ypredland,ypredocean).astype(np.float32)
+        else:
+            raise ValueError('The mode must be `pooled` or `regional`.')
         return ypred

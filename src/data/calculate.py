@@ -12,10 +12,10 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-AUTHOR    = 'Savannah L. Ferretti'      
-EMAIL     = 'savannah.ferretti@uci.edu' 
-FILEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
-SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
+AUTHOR  = 'Savannah L. Ferretti'      
+EMAIL   = 'savannah.ferretti@uci.edu' 
+FILEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
+SAVEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
 
 def retrieve(longname,filedir=FILEDIR):
     '''
@@ -35,25 +35,36 @@ def retrieve(longname,filedir=FILEDIR):
             logger.info(f'   Levels for {filename} were reordered to ascending')
     return da
     
-def create_p_array(da):
+def create_p_array(refda):
     '''
     Purpose: Create a pressure xr.DataArray from the 'lev' dimension.
     Args:
-    - da (xr.DataArray): DataArray containing 'lev'
+    - refda (xr.DataArray): reference DataArray containing 'lev'
     Returns:
     - xr.DataArray: pressure DataArray
     '''
-    p = da.lev.expand_dims({'time':da.time,'lat':da.lat,'lon':da.lon}).transpose('lev','time','lat','lon')
+    p = refda.lev.expand_dims({'time':refda.time,'lat':refda.lat,'lon':refda.lon}).transpose('lev','time','lat','lon')
     return p
 
-def regrid_and_resample(da,gridtarget,method='conservative_normed'):
+def create_level_mask(refda,ps):
+    '''
+    Purpose: Create a below-surface level mask; 1 where levels exist (lev ≤ ps), else 0.
+    - refda (xr.DataArray): reference DataArray containing 'lev'
+    - ps (xr.DataArray): surface pressure (hPa)
+    Returns:
+    - xr.DataArray: DataArray of 0's (invalid levels) or 1's (valid levels)
+    '''
+    levmask = (refda.lev<=ps).transpose('time','lat','lon','lev').astype('uint8')
+    return levmask
+
+def regrid_and_resample(da,gridtarget,method='conservative'):
     '''
     Purpose: Compute a centered hourly mean (uses the two half-hour samples that straddle each hour; falls back to 
-    one at boundaries) and then regrid to a target latitude–longitude grid.
+    one at boundaries) and then regrid to a target latitude–longitude grid. Negative values from regirdding artifacts are clipped to 0.
     Args:
     - da (xr.DataArray): input DataArray
     - gridtarget (xr.DataArray): DataArray with target 'lat' and 'lon' for regridding
-    - method (str): 'bilinear' | 'conservative' | 'conservative_normed' | 'patch' | 'nearest_s2d' | 'nearest_d2s' (defaults to 'conservative_normed')
+    - method (str): regridding method (defaults to 'conservative', the best choice for precipitation)
     Returns:
     - xr.DataArray: DataArray regridded to the target grid at on-the-hour timestamps
     '''
@@ -61,6 +72,7 @@ def regrid_and_resample(da,gridtarget,method='conservative_normed'):
     da = da.sel(time=da.time.dt.minute==0)
     regridder = xesmf.Regridder(da,gridtarget,method=method)
     da = regridder(da,keep_attrs=True)
+    da = da.where(da>=0,0)
     return da
     
 def calc_es(t):
@@ -235,17 +247,20 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     Returns:
     - xr.Dataset: Dataset containing the variable named 'shortname' and metadata
     '''    
-    dims = ('time','lat','lon','lev') if 'lev' in da.dims else ('time','lat','lon')
+    dims = [dim for dim in ('time','lat','lon','lev') if dim in da.dims]
     da = da.transpose(*dims)
     ds = da.to_dataset(name=shortname)
     ds[shortname].attrs = dict(long_name=longname,units=units)
-    ds.time.attrs = dict(long_name='Time')
-    ds.lat.attrs = dict(long_name='Latitude',units='°N')
-    ds.lon.attrs = dict(long_name='Longitude',units='°E')
-    if 'lev' in ds.dims:
-        ds.lev.attrs = dict(long_name='Pressure level',units='hPa')
+    if 'time' in ds.coords:
+        ds.time.attrs = dict(long_name='Time')
+    if 'lat' in ds.coords:
+        ds.lat.attrs  = dict(long_name='Latitude',units='°N')
+    if 'lon' in ds.coords:
+        ds.lon.attrs  = dict(long_name='Longitude',units='°E')
+    if 'lev' in ds.coords:
+        ds.lev.attrs  = dict(long_name='Pressure level',units='hPa')
     ds.attrs = dict(history=f'Created on {datetime.today().strftime("%Y-%m-%d")} by {author} ({email})')
-    logger.info(f'{shortname}: {ds.nbytes*1e-9:.2f} GB')
+    logger.info(f'{shortname}: {ds.nbytes*1e-9:.3f} GB')
     return ds
     
 def save(ds,savedir=SAVEDIR):
@@ -261,9 +276,8 @@ def save(ds,savedir=SAVEDIR):
     shortname = list(ds.data_vars)[0]
     filename  = f'{shortname}.nc' 
     filepath  = os.path.join(savedir,filename)
-    encoding  = (
-        {vardata:{'dtype':'float32'} for vardata in ds.data_vars}
-        | {coord:{'dtype':'float32'} for coord in ('lat','lon','lev') if coord in ds.coords})
+    encoding  = {name: {'dtype':('uint8' if name=='levmask' else 'float32')} for name in ds.data_vars}
+    encoding.update({coord:{'dtype':'float32'} for coord in ('lat','lon','lev') if coord in ds.coords})
     logger.info(f'   Attempting to save {filename}...')   
     try:
         ds.to_netcdf(filepath,engine='h5netcdf',encoding=encoding)
@@ -277,7 +291,8 @@ def save(ds,savedir=SAVEDIR):
 
 if __name__=='__main__':
     try:
-        logger.info('Importing all raw variables...')        
+        logger.info('Importing all raw variables...')
+        lf = retrieve('ERA5_land_fraction')
         pr = retrieve('IMERG_V06_precipitation_rate')
         ps = retrieve('ERA5_surface_pressure')
         t  = retrieve('ERA5_air_temperature')
@@ -295,13 +310,15 @@ if __name__=='__main__':
             'capeproxy':[],
             'subsatproxy':[],
             't':[],
-            'q':[]}
+            'q':[],
+            'levmask':[]}
         for i,timechunk in enumerate(timechunks):
             logger.info(f'Processing time chunk {i+1}/{len(timechunks)}...')
             pschunk = ps.isel(time=timechunk).load()
             tchunk  = t.isel(time=timechunk).load()
             qchunk  = q.isel(time=timechunk).load()
             pchunk  = create_p_array(qchunk)
+            levmaskchunk = create_level_mask(tchunk,pschunk)
             logger.info('   Calculating equivalent potential temperature terms')
             thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
             thetaesatchunk  = calc_thetae(pchunk,tchunk)
@@ -330,10 +347,12 @@ if __name__=='__main__':
             results['subsatproxy'].append(subsatproxychunk)
             results['t'].append(tchunk)
             results['q'].append(qchunk)
-            del blchunk,capechunk,subsatchunk,capeproxychunk,subsatproxychunk,tchunk,qchunk
+            results['levmask'].append(levmaskchunk)
+            del blchunk,capechunk,subsatchunk,capeproxychunk,subsatproxychunk,tchunk,qchunk,levmaskchunk
         del ps,t,q
         logger.info('Creating datasets...')
         dslist = [
+            dataset(lf,'lf','Land fraction','0-1'),
             dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/hr'),
             dataset(xr.concat(results['bl'],dim='time'),'bl','Average buoyancy in the lower troposphere','m/s²'),
             dataset(xr.concat(results['cape'],dim='time'),'cape','Undilute buoyancy in the lower troposphere','K'),
@@ -341,7 +360,8 @@ if __name__=='__main__':
             dataset(xr.concat(results['capeproxy'],dim='time'),'capeproxy','θₑ(surface) - saturated θₑ(p)','K'),
             dataset(xr.concat(results['subsatproxy'],dim='time'),'subsatproxy','Saturated θₑ(p) - θₑ(p)','K'), 
             dataset(xr.concat(results['t'],dim='time'),'t','Air temperature','K'),
-            dataset(xr.concat(results['q'],dim='time'),'q','Specific humidity','kg/kg')]
+            dataset(xr.concat(results['q'],dim='time'),'q','Specific humidity','kg/kg'),
+            dataset(xr.concat(results['levmask'],dim='time'),'levmask','Below-surface level mask','N/A')]
         logger.info('Saving datasets...')
         for ds in dslist:
             save(ds)

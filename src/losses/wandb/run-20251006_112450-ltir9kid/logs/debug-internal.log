@@ -1,6 +1,0 @@
-{"time":"2025-10-06T11:24:50.953363486-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
-{"time":"2025-10-06T11:24:51.270102084-07:00","level":"INFO","msg":"stream: created new stream","id":"ltir9kid"}
-{"time":"2025-10-06T11:24:51.270479676-07:00","level":"INFO","msg":"stream: started","id":"ltir9kid"}
-{"time":"2025-10-06T11:24:51.270560492-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"ltir9kid"}
-{"time":"2025-10-06T11:24:51.270594779-07:00","level":"INFO","msg":"handler: started","stream_id":"ltir9kid"}
-{"time":"2025-10-06T11:24:51.270593907-07:00","level":"INFO","msg":"sender: started","stream_id":"ltir9kid"}

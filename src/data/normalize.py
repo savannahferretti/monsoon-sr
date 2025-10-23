@@ -11,9 +11,7 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-with open('../nn/configs.json','r',encoding='utf8') as f:
-    CONFIGS = json.load(f)
-FILEDIR     = CONFIGS['paths']['filedir']
+FILEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/splits'
 TARGETVAR   = 'pr'
 CHUNKSIZE   = 2208   
 
@@ -48,7 +46,7 @@ def reshape(da):
 def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
     Purpose: Compute training-set statistics for each variable and save to JSON. For 4D input variables 
-    (with 'lev'), compute statistics using elements where mask==1. For the target variable, compute statistics on log1p(target).
+    (with 'lev'), compute statistics using elements where levmask==1. For the target variable, compute statistics on log1p(target).
     Args:
     - trainds(xr.Dataset): training Dataset
     - targetvar (str): target variable name (defaults to TARGETVAR)
@@ -57,16 +55,18 @@ def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
     - dict[str,float]: the training set mean/std for each variable in 'trainds'
     '''
     stats = {}
-    mask  = reshape(trainds['mask']).astype(bool)
+    levmask = reshape(trainds['levmask']).astype(bool)
     for varname in trainds.data_vars:
-        if varname=='mask':
+        if varname=='levmask':
+            continue
+        if varname=='lf':
             continue
         da  = trainds[varname]
         arr = reshape(da)
         if varname==targetvar:
             flat = np.log1p(arr).ravel()
         else:
-            flat = arr[mask] if ('lev' in da.dims) else arr.ravel()
+            flat = arr[levmask] if ('lev' in da.dims) else arr.ravel()
         stats[f'{varname}_mean'] = float(np.nanmean(flat))
         stats[f'{varname}_std']  = float(np.nanstd(flat))
     filename = 'stats.json'
@@ -76,14 +76,14 @@ def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
     logger.info(f'   Wrote statistics to {filename}')
     return stats
 
-def normalize(da,stats,mask,targetvar=TARGETVAR):
+def normalize(da,stats,levmask,targetvar=TARGETVAR):
     '''
     Purpose: Z-score normalize an xr.DataArray using provided statistics and an optional mask. For 4D inputs, multiply by the 
     level mask to gate invalid pressure levels to 0. For the target variable, we log1p-transform then normalize.  
     Args:
     - da (xr.DataArray): variable DataArray to normalize
     - stats (dict): normalization mean/std
-    - mask (np.ndarray): boolean mask
+    - levmask (np.ndarray): below-surface level mask
     - targetvar (str): target variable name (defaults to TARGETVAR)
     Returns:
     - xr.DataArray: normalized DataArray
@@ -95,7 +95,7 @@ def normalize(da,stats,mask,targetvar=TARGETVAR):
     else:
         norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
         if 'lev' in da.dims:
-            norm = norm*mask
+            norm = norm*levmask
     normda   = xr.DataArray(norm.astype(np.float32).reshape(da.shape),dims=da.dims,coords=da.coords,name=da.name)
     longname = da.attrs.get('long_name',da.name)
     if da.name==targetvar:
@@ -117,13 +117,15 @@ def process(splitname,stats,chunksize=CHUNKSIZE,filedir=FILEDIR):
     '''
     logger.info(f'   Normalizing {splitname}')
     splitds  = load(splitname)
-    mask     = reshape(splitds['mask']).astype(bool)
+    levmask  = reshape(splitds['levmask']).astype(bool)
     datavars = {} 
     for varname in splitds.data_vars:
-        if varname=='mask':
-            datavars['mask'] = splitds['mask'].astype('uint8')
+        if varname=='levmask':
+            datavars['levmask'] = splitds['levmask'].astype('uint8')
+        elif varname=='lf':
+            datavars['lf'] = splitds['lf']
         else:
-            datavars[varname] = normalize(splitds[varname],stats,mask)
+            datavars[varname] = normalize(splitds[varname],stats,levmask)
     ds = xr.Dataset(datavars)
     encoding = {}
     for varname,da in ds.data_vars.items():
@@ -132,7 +134,7 @@ def process(splitname,stats,chunksize=CHUNKSIZE,filedir=FILEDIR):
             'compression':'lzf',
             'shuffle':True,
             'chunksizes':chunks,
-            'dtype':da.dtype}
+            'dtype':('uint8' if varname=='levmask' else da.dtype)}
     filename = f'norm_{splitname}.h5'
     filepath = os.path.join(filedir,filename)
     logger.info(f'   Attempting to save {filename} ...')

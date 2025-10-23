@@ -13,85 +13,81 @@ logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
 with open('configs.json','r',encoding='utf8') as f:
-    CONFIGS = json.load(f)
-FILEDIR     = CONFIGS['paths']['filedir']
-MODELDIR    = CONFIGS['paths']['modeldir']
-RESULTSDIR  = CONFIGS['paths']['resultsdir']
-RUNCONFIGS  = CONFIGS['runs']
-INPUTVAR    = 'bl'
-TARGETVAR   = 'pr'
+    CONFIGS  = json.load(f)
+FILEDIR      = CONFIGS['paths']['filedir']
+MODELDIR     = CONFIGS['paths']['modeldir']
+RESULTSDIR   = CONFIGS['paths']['resultsdir']
+RUNCONFIGS   = CONFIGS['runs']
+INPUTVAR     = 'bl'
+TARGETVAR    = 'pr'
+LANDVAR      = 'lf'
+BINMIN       = -0.6
+BINMAX       = 0.1
+BINWIDTH     = 0.001
+SAMPLETHRESH = 50
+PRMIN        = 1.0
+PRMAX        = 5.0
 
-def load(inputvar=INPUTVAR,targetvar=TARGETVAR,filedir=FILEDIR):
-    '''
-    Purpose: Load in training and validation data splits, which we combine for training.
-    Args:
-    - inputvar (str): input variable name (defaults to INPUTVAR)
-    - targetvar (str): target variable name (defaults to TARGETVAR)
-    - filedir (str): directory containing split files (defaults to FILEDIR)
-    Returns:
-    - tuple[xr.DataArray,xr.DataArray]: 3D BL/precipitation DataArrays for training
-    '''
+def load(inputvar=INPUTVAR,targetvar=TARGETVAR,landvar=LANDVAR,filedir=FILEDIR):
     dslist = []
     for splitname in ('train','valid'):
         filename = f'{splitname}.h5'
         filepath = os.path.join(filedir,filename)
-        ds = xr.open_dataset(filepath,engine='h5netcdf')[[inputvar,targetvar]]
+        ds = xr.open_dataset(filepath,engine='h5netcdf')[[inputvar,targetvar,landvar]]
         dslist.append(ds)
     trainds = xr.concat(dslist,dim='time')
-    X,y = trainds[inputvar].load(),trainds[targetvar].load()
-    return X,y
+    x  = trainds[inputvar].load()
+    y  = trainds[targetvar].load()
+    lf = trainds[landvar].load()
+    return x,y,lf
 
-def fit(model,Xtrain,ytrain):
-    '''
-    Purpose: Train a POD model by computing average precipitation in each BL bin.
-    Args:
-    - model (PODModel): initialized model instance
-    - Xtrain (xr.DataArray): 3D BL DataArray for training
-    - ytrain (xr.DataArray): 3D precipitation DataArray for training
-    Returns:
-    - None: the same model instance with 'binmeans' and 'nparams' populated
-    '''
-    Xflat = Xtrain.values.ravel()
+def fit(model,xtrain,ytrain,mask=None,binmin=BINMIN,binmax=BINMAX,binwidth=BINWIDTH,samplethresh=SAMPLETHRESH,prmin=PRMIN,prmax=PRMAX):  
+    xflat = xtrain.values.ravel()
     yflat = ytrain.values.ravel()
-    mask  = np.isfinite(Xflat)&np.isfinite(yflat)
-    Xflat = Xflat[mask]
-    yflat = yflat[mask]
-    binidxs = np.digitize(Xflat,model.binedges)-1
-    inrange = (binidxs>=0)&(binidxs<model.nbins)
-    counts = np.bincount(binidxs[inrange],minlength=model.nbins).astype(np.int64)
-    sums   = np.bincount(binidxs[inrange],weights=yflat[inrange],minlength=model.nbins).astype(np.float32)
+    valid = np.isfinite(xflat)&np.isfinite(yflat)
+    if mask is not None:
+        valid &= mask.ravel()
+    xflat = xflat[valid]
+    yflat = yflat[valid]
+    xedges = np.arange(binmin,binmax+binwidth,binwidth,dtype=np.float64)
+    xidxs  = np.digitize(xflat,xedges)-1
+    nxbins = xedges.size-1
+    inrange = (xidxs>=0)&(xidxs<nxbins)
+    ycounts  = np.bincount(xidxs[inrange],minlength=nxbins).astype(np.int64)
+    ysums    = np.bincount(xidxs[inrange],weights=yflat[inrange],minlength=nxbins).astype(np.float64)
     with np.errstate(divide='ignore',invalid='ignore'):
-        means = sums/counts
-    means[counts<model.samplethresh] = np.nan
-    model.binmeans = means.astype(np.float32)
-    model.nparams  = int(np.isfinite(model.binmeans).sum())
-    return None
+        ymeans = ysums/ycounts
+    ymeans[ycounts<samplethresh] = np.nan
+    xbins = (xedges[:-1]+xedges[1:])*0.5
+    keep  = np.isfinite(ymeans)&(ymeans>=prmin)&(ymeans<=prmax)
+    slope,intercept = np.polyfit(xbins[keep],ymeans[keep],deg=1)
+    alpha  = float(slope)
+    blcrit = float(-intercept/slope)
+    return alpha,blcrit
 
 def save(model,runname,modeldir=MODELDIR):
-    '''
-    Purpose: Save trained model parameters and configuration to a .npz file in the specified directory, then verify the write by reopening.
-    Args:
-    - model (PODModel): trained model instance
-    - runname (str): model run name
-    - modeldir (str): output directory (defaults to MODELDIR)
-    Returns:
-    - bool: True if write and verification succeed, otherwise False
-    '''
     os.makedirs(modeldir,exist_ok=True)
     filename = f'pod_{runname}.npz'
     filepath = os.path.join(modeldir,filename)
     logger.info(f'   Attempting to save {filename}...')
     try:
-        np.savez(
-            filepath,
-            binedges=model.binedges,
-            bincenters=model.bincenters,
-            binmeans=model.binmeans,
-            samplethresh=np.int32(model.samplethresh),
-            binwidth=np.float32(model.binwidth),
-            binmin=np.float32(model.binmin),
-            binmax=np.float32(model.binmax),
-            nparams=np.int32(model.nparams))
+        if model.mode=='pooled':
+            np.savez(
+                filepath,
+                mode=np.array(['pooled']),
+                alphapooled=np.float32(model.alphapooled),
+                blcritpooled=np.float32(model.blcritpooled),
+                nparams=np.int32(model.nparams))
+        elif model.mode=='regional':
+            np.savez(
+                filepath,
+                mode=np.array(['regional']),
+                alphaland=np.float32(model.alphaland),
+                blcritland=np.float32(model.blcritland),
+                alphaocean=np.float32(model.alphaocean),
+                blcritocean=np.float32(model.blcritocean),
+                landthresh=np.float32(model.landthresh),
+                nparams=np.int32(model.nparams))
         with np.load(filepath) as _:
             pass
         logger.info('      File write successful')
@@ -99,19 +95,35 @@ def save(model,runname,modeldir=MODELDIR):
     except Exception:
         logger.exception('      Failed to save or verify')
         return False
-
+        
 if __name__=='__main__':
     try:
         logger.info('Loading training + validation data splits combined...')
-        Xtrain,ytrain = load()
-        logger.info('Training and saving POD models...')
+        xtrain,ytrain,lftrain = load()
+        logger.info('Training and saving ramp-fit POD models...')
         for config in RUNCONFIGS:
             runname     = config['run_name']
-            binwidth    = config['bin_width']
+            mode        = config['mode']
             description = config['description']
             logger.info(f'   Training {description}')
-            model = PODModel(binwidth)
-            fit(model,Xtrain,ytrain)
+            model = PODModel(mode=mode)
+            if mode=='pooled':
+                pooledparams = fit(model,xtrain,ytrain,mask=None)
+                model.alphapooled  = pooledparams[0]
+                model.blcritpooled = pooledparams[1]
+                model.nparams      = 2
+            elif mode=='regional':
+                landmask    = (lftrain.values>=model.landthresh)
+                oceanmask   = ~landmask
+                landparams  = fit(model,xtrain,ytrain,mask=landmask)
+                oceanparams = fit(model,xtrain,ytrain,mask=oceanmask)
+                model.alphaland   = landparams[0]
+                model.blcritland  = landparams[1]
+                model.alphaocean  = oceanparams[0]
+                model.blcritocean = oceanparams[1]
+                model.nparams     = 4
+            else:
+                raise ValueError('The `mode` in `configs.json` must be `pooled` or `regional`.')
             save(model,runname)
             del model
         logger.info('Script execution completed successfully!')
