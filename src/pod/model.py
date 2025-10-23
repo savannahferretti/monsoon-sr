@@ -1,28 +1,36 @@
 #!/usr/bin/env python
 
+import json
 import numpy as np
 
 class PODModel:
     
-    def __init__(self,mode,landthresh=0.5):
+    def __init__(self,mode,alphapooled=None,blcritpooled=None,alphaland=None,blcritland=None,alphaocean=None,blcritocean=None):
         '''
         Purpose: Initialize a ramp-based POD model for precipitation prediction using Eq. 8 from Ahmed F., Adames Á.F., & 
         Neelin J.D. (2020), J. Atmos. Sci.
         Args: 
         - mode (str): 'pooled' (single ramp) | 'regional' (separate land/ocean ramps)
-        - landthresh (float): routing threshold for 'regional' mode, where land occurs ≥ 'landthresh' (defaults to 0.5)
+        - alphapooled (float): slope for pooled mode (optional)
+        - blcritpooled (float): critical BL for pooled mode (optional)
+        - alphaland (float): slope for land in regional mode (optional)
+        - blcritland (float): critical BL for land in regional mode (optional)
+        - alphaocean (float): slope for ocean in regional mode (optional)
+        - blcritocean (float): critical BL for ocean in regional mode (optional)
         Returns:
         - None
         '''
+        with open('configs.json','r',encoding='utf8') as f:
+            configs = json.load(f)
         self.mode         = str(mode)
-        self.landthresh   = float(landthresh)
-        self.alphapooled  = np.nan
-        self.blcritpooled = np.nan
-        self.alphaland    = np.nan
-        self.blcritland   = np.nan
-        self.alphaocean   = np.nan
-        self.blcritocean  = np.nan
-        self.nparams      = 0
+        self.landthresh   = float(configs['dataparams']['landthresh'])
+        self.alphapooled  = alphapooled
+        self.blcritpooled = blcritpooled
+        self.alphaland    = alphaland
+        self.blcritland   = blcritland
+        self.alphaocean   = alphaocean
+        self.blcritocean  = blcritocean
+        self.nparams      = 2 if mode=='pooled' else 4
 
     def forward(self,x,lf=None):
         '''
@@ -31,7 +39,7 @@ class PODModel:
         - x (xr.DataArray): input 3D BL DataArray
         - lf (xr.DataArray): land fraction for routing in 'regional' mode (same shape as 'x')
         Returns:
-        - np.ndarray: predicted prediction array of shape (x.size,)
+        - np.ndarray: predicted precipitation array of shape (x.size,)
         '''
         xflat  = x.values.ravel()
         ypred  = np.full(xflat.shape,np.nan,dtype=np.float32)
@@ -39,12 +47,9 @@ class PODModel:
         if self.mode=='pooled':
             ypred[finite] = self.alphapooled*np.maximum(0.0,xflat[finite]-self.blcritpooled).astype(np.float32)
         elif self.mode=='regional':
-            if lf is None:
-                raise ValueError('Regional mode requires `lf` for routing.')
-            landmask      = (lf.values.ravel()[finite]>=self.landthresh)
+            lfflat = lf.values.ravel()
+            land   = (lfflat[finite]>=self.landthresh)
             ypredland     = self.alphaland*np.maximum(0.0,xflat[finite]-self.blcritland)
             ypredocean    = self.alphaocean*np.maximum(0.0,xflat[finite]-self.blcritocean)
-            ypred[finite] = np.where(landmask,ypredland,ypredocean).astype(np.float32)
-        else:
-            raise ValueError('The mode must be `pooled` or `regional`.')
+            ypred[finite] = np.where(land,ypredland,ypredocean).astype(np.float32)
         return ypred
