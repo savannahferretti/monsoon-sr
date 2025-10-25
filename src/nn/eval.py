@@ -4,8 +4,8 @@ import os
 import json
 import torch
 import logging
-import warnings
 import argparse
+import warnings
 import numpy as np
 import xarray as xr
 from model import NNModel
@@ -20,10 +20,13 @@ with open('configs.json','r',encoding='utf8') as f:
 FILEDIR     = CONFIGS['paths']['filedir']
 MODELDIR    = CONFIGS['paths']['modeldir']
 RESULTSDIR  = CONFIGS['paths']['resultsdir']
-RUNCONFIGS  = CONFIGS['runs']
-TARGETVAR   = 'pr'
-DEVICE      = 'cuda' if torch.cuda.is_available() else 'cpu'
-BATCHSIZE   = 33120
+TARGETVAR   = CONFIGS['dataparams']['targetvar']
+LANDVAR     = CONFIGS['dataparams']['landvar']
+BATCHSIZE   = CONFIGS['evalparams']['batchsize']
+EXPERIMENTS = CONFIGS['experiments']
+RUNS        = CONFIGS['runs']
+
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def reshape(da):
     '''
@@ -39,27 +42,30 @@ def reshape(da):
         arr = da.transpose('time','lat','lon').values.reshape(-1,1)
     return arr
     
-def load(splitname,inputvars,targetvar=TARGETVAR,filedir=FILEDIR):
+def load(splitname,inputvars,uself,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
     Purpose: Load in a normalized training or validation split and build a 2D feature matrix for the NN. 
     Args:
     - splitname (str): 'norm_valid' | 'norm_test'
     - inputvars (list[str]): list of input variables
+    - uself (bool): whether to include land fraction as an input feature
+    - landvar (str): land fraction variable name (defaults to LANDVAR)
     - targetvar (str): target variable name (defaults to TARGETVAR)
     - filedir (str): directory containing split files (defaults to FILEDIR)
     Returns:
-    - tuple[torch.FloatTensor,torch.FloatTensor]: 2D input tensor and target DataArray (for reshaping predictions)
+    - tuple[torch.FloatTensor,xr.DataArray]: 2D input tensor and target DataArray (for reshaping predictions)
     '''
     if splitname not in ('norm_valid','norm_test'):
-        raise ValueError("Split must be 'norm_valid' or 'norm_test'.")
+        raise ValueError('Splitname must be `norm_valid` or `norm_test`.')
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
     varlist  = list(inputvars)+[targetvar]
+    if uself:
+        varlist.append(landvar)
     ds = xr.open_dataset(filepath,engine='h5netcdf')[varlist]
-    ################
-    ds = ds.sel(time=slice('2015-06-01','2015-08-31'))
-    ###############
     Xlist = [reshape(ds[inputvar]) for inputvar in inputvars]
+    if uself:
+        Xlist.append(reshape(ds[landvar]))
     X = np.concatenate(Xlist,axis=1) if len(Xlist)>1 else Xlist[0]
     X = torch.tensor(X,dtype=torch.float32)
     ytemplate = ds[targetvar]
@@ -100,7 +106,7 @@ def denormalize(ynormflat,targetvar=TARGETVAR,filedir=FILEDIR):
     ylog = ynormflat*std+mean
     y = np.expm1(ylog)
     return y
-    
+
 def predict(model,X,ytemplate,batchsize=BATCHSIZE,device=DEVICE):
     '''
     Purpose: Run the NN forward pass in batches and return precipitation predictions as an xr.DataArray.
@@ -155,16 +161,22 @@ def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Evaluate NN models on a chosen split.')
-    parser.add_argument('--split',required=True,choices=['norm_valid','norm_test'],help="Which split to evaluate: 'norm_valid' or 'norm_test'.")
+    parser.add_argument('--split',required=True,choices=['norm_valid','norm_test'],help='Which split to evaluate: `norm_valid` or `norm_test`.')
     args = parser.parse_args()
     try:
-        logger.info('Evaluating NN models...')
-        for config in RUNCONFIGS:
-            runname     = config['run_name']
-            inputvars   = config['input_vars']
-            description = config['description']
-            logger.info(f'   Evaluating {description}')
-            X,ytemplate = load(args.split,inputvars)
+        explookup = {experiment['exp_name']:experiment for experiment in EXPERIMENTS}
+        logger.info(f'Evaluating NN models on {args.split} set...')
+        for run in RUNS:
+            runname  = run['run_name']
+            expname  = run['exp_name']
+            uself    = run['use_lf']
+            loss     = run['loss']
+            exp         = explookup[expname]
+            inputvars   = exp['input_vars']
+            description = exp['description']
+            lfstr       = 'with' if uself else 'without'
+            logger.info(f'   Evaluating {description} {lfstr} land fraction using {loss.upper()} loss')
+            X,ytemplate = load(args.split,inputvars,uself)
             model = fetch(runname,X.shape[1])
             ypred = predict(model,X,ytemplate)
             save(ypred,runname,args.split)

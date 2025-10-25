@@ -12,11 +12,19 @@ class NNModel(torch.nn.Module):
           'nlevels' per variable; for experiments with more than one variable it's the sum across variables)
         '''
         super().__init__()
+        # self.layers = torch.nn.Sequential(
+        #     torch.nn.Linear(inputsize,256), torch.nn.GELU(),
+        #     torch.nn.Linear(256,128),       torch.nn.GELU(),
+        #     torch.nn.Linear(128,64),        torch.nn.GELU(),
+        #     torch.nn.Linear(64,32),         torch.nn.GELU(),
+        #     torch.nn.Linear(32,1))
         self.layers = torch.nn.Sequential(
-            torch.nn.Linear(inputsize,256), torch.nn.GELU(),
-            torch.nn.Linear(256,128),       torch.nn.GELU(),
-            torch.nn.Linear(128,64),        torch.nn.GELU(),
-            torch.nn.Linear(64,32),         torch.nn.GELU(),
+            torch.nn.Linear(inputsize,64),
+            torch.nn.GELU(),
+            torch.nn.Dropout(0.2),
+            torch.nn.Linear(64,32),
+            torch.nn.GELU(),
+            torch.nn.Dropout(0.2),
             torch.nn.Linear(32,1))
 
     def forward(self,X):
@@ -48,8 +56,8 @@ class TweedieDevianceLoss(torch.nn.Module):
         '''
         Purpose: Define the Tweedie unit deviance using Eq. 10 from Hunt KMR. (2025), arXiv:2509.08369.
         Args:
-        - ypred (torch.Tensor): 1D tensor of predicted mean precipitation (≥ 0 mm/day) 
-        - ytrue (torch.Tensor): 1D tensor of observed precipitation (≥ 0 mm/day)
+        - ypred (torch.Tensor): 1D tensor of predicted mean precipitation (≥ 0 mm/hr) 
+        - ytrue (torch.Tensor): 1D tensor of observed precipitation (≥ 0 mm/hr)
         Returns:
         - torch.Tensor: mean Tweedie deviance loss
         '''

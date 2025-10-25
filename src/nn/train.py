@@ -9,7 +9,7 @@ import logging
 import warnings
 import numpy as np
 import xarray as xr
-from model import NNModel
+from model import NNModel,TweedieDevianceLoss
 from torch.utils.data import TensorDataset,DataLoader
 
 logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
@@ -20,21 +20,34 @@ with open('configs.json','r',encoding='utf8') as f:
     CONFIGS  = json.load(f)
 FILEDIR      = CONFIGS['paths']['filedir']
 MODELDIR     = CONFIGS['paths']['modeldir']
-RESULTSDIR   = CONFIGS['paths']['resultsdir']
-RUNCONFIGS   = CONFIGS['runs']
-TARGETVAR    = 'pr'
-EPOCHS       = 20
-BATCHSIZE    = 66240
-LEARNINGRATE = 0.001
-PATIENCE     = 3
-CRITERION    = torch.nn.MSELoss()
-DEVICE       = 'cuda' if torch.cuda.is_available() else 'cpu'
+TARGETVAR    = CONFIGS['dataparams']['targetvar']
+LANDVAR      = CONFIGS['dataparams']['landvar']
+EPOCHS       = CONFIGS['trainparams']['epochs']
+BATCHSIZE    = CONFIGS['trainparams']['batchsize']
+LEARNINGRATE = CONFIGS['trainparams']['learningrate']
+PATIENCE     = CONFIGS['trainparams']['patience']
+EXPERIMENTS  = CONFIGS['experiments']
+RUNS         = CONFIGS['runs']
 
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 if DEVICE=='cuda':
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.set_float32_matmul_precision('high')
-    
+
+def get_criterion(loss):
+    '''
+    Purpose: Return the appropriate loss function based on configuration.
+    Args:
+    - loss (str): 'mse' | 'tweedie'
+    Returns:
+    - torch.nn.Module: loss function instance
+    '''
+    if loss=='mse':
+        return torch.nn.MSELoss()
+    elif loss=='tweedie':
+        return TweedieDevianceLoss(p=1.5,epsilon=1e-12)
+
 def reshape(da):
     '''
     Purpose: Convert an xr.DataArray into a 2D NumPy array suitable for NN I/O.
@@ -49,38 +62,38 @@ def reshape(da):
         arr = da.transpose('time','lat','lon').values.reshape(-1,1)
     return arr
 
-def load(splitname,inputvars,targetvar=TARGETVAR,filedir=FILEDIR):
+def load(splitname,inputvars,uself,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
     Purpose: Load in a normalized training or validation split and build a 2D feature matrix for the NN. 
     Args:
     - splitname (str): 'norm_train' | 'norm_valid'
     - inputvars (list[str]): list of input variables
+    - uself (bool): whether to include land fraction as an input feature
+    - landvar (str): land fraction variable name (defaults to LANDVAR)
     - targetvar (str): target variable name (defaults to TARGETVAR)
     - filedir (str): directory containing split files (defaults to FILEDIR)
     Returns:
     - tuple[torch.FloatTensor,torch.FloatTensor]: 2D input/target tensors
     '''
     if splitname not in ('norm_train','norm_valid'):
-        raise ValueError("Splitname must be 'norm_train' or 'norm_valid'.")
+        raise ValueError('Splitname must be `norm_train` or `norm_valid`.')
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
     varlist  = list(inputvars)+[targetvar]
+    if uself:
+        varlist.append(landvar)
     ds    = xr.open_dataset(filepath,engine='h5netcdf')[varlist]
-    ##########################
-    if splitname=='norm_train':
-        ds = ds.sel(time=slice('2011-06-01','2014-08-31'))
-    elif splitname=='norm_valid':
-        ds = ds.sel(time=slice('2015-06-01','2015-08-31'))
-    ##########################
     Xlist = [reshape(ds[inputvar]) for inputvar in inputvars]
+    if uself:
+        Xlist.append(reshape(ds[landvar]))
     X = np.concatenate(Xlist,axis=1) if len(Xlist)>1 else Xlist[0]
     y = reshape(ds[targetvar])
     X = torch.tensor(X,dtype=torch.float32)
     y = torch.tensor(y,dtype=torch.float32)
     return X,y
 
-def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,batchsize=BATCHSIZE,device=DEVICE,learningrate=LEARNINGRATE,
-        patience=PATIENCE,criterion=CRITERION,epochs=EPOCHS):
+def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,criterion,batchsize=BATCHSIZE,device=DEVICE,learningrate=LEARNINGRATE,
+        patience=PATIENCE,epochs=EPOCHS):
     '''
     Purpose: Train a NN model with early stopping and learning rate scheduling.
     Args:
@@ -90,11 +103,11 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,batchsize=BATCHSIZE,device=DEV
     - Xvalid (torch.Tensor): validation input(s)
     - ytrain (torch.Tensor): training target
     - yvalid (torch.Tensor): validation target
+    - criterion (callable): loss function used for optimization
     - batchsize (int): number of samples per training batch (defaults to BATCHSIZE)
     - device (str): 'cuda' or 'cpu' device for model training (defaults to DEVICE)
     - learningrate (float): initial learning rate for the Adam optimizer (defaults to LEARNINGRATE)
     - patience (int): number of epochs to wait without validation loss improvement before early stopping (defaults to PATIENCE)
-    - criterion (callable): loss function used for optimization (defaults to CRITERION)
     - epochs (int): maximum number of training epochs (defaults to EPOCHS)
     Returns:
     - None: trains in-place and saves the best model checkpoint
@@ -107,7 +120,7 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,batchsize=BATCHSIZE,device=DEV
     optimizer  = torch.optim.Adam(model.parameters(),lr=learningrate)
     scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='min',factor=0.5,patience=patience)
     wandb.init(
-        project='Precipitation NNs',
+        project='Tweedie vs. MSE with Land Fractions',
         name=runname,
         config={
             'Epochs':epochs,
@@ -190,16 +203,22 @@ def save(modelstate,runname,modeldir=MODELDIR):
 
 if __name__=='__main__':
     try:
+        explookup = {experiment['exp_name']:experiment for experiment in EXPERIMENTS}
         logger.info('Training and saving NN models...')
-        for config in RUNCONFIGS:
-            runname     = config['run_name']
-            inputvars   = config['input_vars']
-            description = config['description']
-            logger.info(f'   Training {description}')
-            Xtrain,ytrain = load('norm_train',inputvars)
-            Xvalid,yvalid = load('norm_valid',inputvars)
+        for run in RUNS:
+            runname  = run['run_name']
+            expname  = run['exp_name']
+            uself    = run['use_lf']
+            loss     = run['loss']
+            exp         = explookup[expname]
+            inputvars   = exp['input_vars']
+            description = exp['description']
+            lfstr       = 'with' if uself else 'without'
+            logger.info(f'   Training {description} {lfstr} land fraction using {loss.upper()} loss')
+            Xtrain,ytrain = load('norm_train',inputvars,uself)
+            Xvalid,yvalid = load('norm_valid',inputvars,uself)
             model = NNModel(Xtrain.shape[1])
-            fit(model,runname,Xtrain,Xvalid,ytrain,yvalid)
+            fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,get_criterion(loss))
             del model,Xtrain,Xvalid,ytrain,yvalid
         logger.info('Script completed successfully!')
     except Exception as e:
