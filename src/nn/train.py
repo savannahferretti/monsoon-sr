@@ -45,6 +45,8 @@ def get_criterion(loss):
     '''
     if loss=='mse':
         return torch.nn.MSELoss()
+    elif loss=='mae':
+        return torch.nn.L1Loss()
     elif loss=='tweedie':
         return TweedieDevianceLoss(p=1.5,epsilon=1e-12)
 
