@@ -18,5 +18,7 @@
   "evalparams":{
       "batchsize":33120},
   "runs":[
+    {"run_name":"bl_only_nolf_mse","exp_name":"bl_only","use_lf":false,"loss":"mse"},
+    {"run_name":"bl_only_lf_mse","exp_name":"bl_only","use_lf":true,"loss":"mse"},
     {"run_name":"bl_only_nolf_mae","exp_name":"bl_only","use_lf":false,"loss":"mae"},
     {"run_name":"bl_only_lf_mae","exp_name":"bl_only","use_lf":true,"loss":"mae"}]}

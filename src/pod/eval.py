@@ -109,7 +109,6 @@ def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
         logger.exception('      Failed to save or verify')
         return False
 
-
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Evaluate POD ramp models on a chosen data split.')
     parser.add_argument('--split',required=True,choices=['valid','test'],help='Which split to evaluate: `valid` or `test`.')

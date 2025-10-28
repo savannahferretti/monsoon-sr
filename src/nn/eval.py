@@ -130,7 +130,7 @@ def predict(model,X,ytemplate,batchsize=BATCHSIZE,device=DEVICE):
             ypredlist.append(ybatchpred.squeeze(-1).cpu().numpy())
     ynormflat = np.concatenate(ypredlist,axis=0)
     ypredflat = denormalize(ynormflat)
-    da = xr.DataArray(ypredflat.reshape(ytemplate.shape),dims=ytemplate.dims,coords=ytemplate.coords,name='predpr')
+    da = xr.DataArray(ypredflat.reshape(ytemplate.shape),dims=ytemplate.dims,coords=ytemplate.coords,name='pr')
     da.attrs = dict(long_name='NN-predicted precipitation',units='mm/day')
     return da
 
