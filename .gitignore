@@ -1,5 +1,9 @@
 # Jupyter checkpoint files
-**/.ipynb_checkpoints/     
+**/.ipynb_checkpoints/
+
+# Python cache files
+**/__pycache__/
+*.pyc     
 
 # Exclude everything in data subdirectories
 data/raw/*
