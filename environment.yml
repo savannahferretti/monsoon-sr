@@ -19,6 +19,7 @@ dependencies:
   - julia
   - pytorch
   - scikit-learn
+  - xgboost
   - adlfs
   - gcsfs
   - fsspec

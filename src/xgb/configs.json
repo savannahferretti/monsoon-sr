@@ -1,0 +1,28 @@
+{
+  "paths":{
+    "filedir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/splits",
+    "modeldir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/models/xgb",
+    "resultsdir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/results"},
+  "dataparams":{
+    "targetvar":"pr",
+    "landvar":"lf"},
+  "experiments":[
+    {"exp_name":"bl_only","input_vars":["bl"],"description":"$\\mathit{B_L}$ Only"},
+    {"exp_name":"cape_subsat","input_vars":["cape","subsat"],"description":"$CAPE_L$ & $SUBSAT_L$"},
+    {"exp_name":"q_only","input_vars":["q"],"description":"Specific Humidity Only"}],
+  "trainparams":{
+    "n_estimators":500,
+    "max_depth":8,
+    "learning_rate":0.1,
+    "subsample":0.8,
+    "colsample_bytree":0.8,
+    "tree_method":"hist",
+    "early_stopping_rounds":50,
+    "objective":"reg:squarederror"},
+  "evalparams":{
+    "batchsize":100000},
+  "runs":[
+    {"run_name":"bl_only_nolf_mse","exp_name":"bl_only","use_lf":false,"objective":"reg:squarederror"},
+    {"run_name":"bl_only_lf_mse","exp_name":"bl_only","use_lf":true,"objective":"reg:squarederror"},
+    {"run_name":"bl_only_nolf_mae","exp_name":"bl_only","use_lf":false,"objective":"reg:absoluteerror"},
+    {"run_name":"bl_only_lf_mae","exp_name":"bl_only","use_lf":true,"objective":"reg:absoluteerror"}]}
