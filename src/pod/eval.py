@@ -80,7 +80,7 @@ def predict(model,x,lf=None):
     - xr.DataArray: 3D DataArray of predicted precipitation
     '''
     ypredflat = model.forward(x,lf=lf if model.mode=='regional' else None)
-    ypred = xr.DataArray(ypredflat.reshape(x.shape),dims=x.dims,coords=x.coords,name='pr')
+    ypred = xr.DataArray(ypredflat.reshape(x.shape),dims=x.dims,coords=x.coords,name='predpr')
     ypred.attrs = dict(long_name='POD-predicted precipitation',units='mm/hr')
     return ypred
 
