@@ -1,3 +1,0 @@
-2025-09-15 09:55:02 - INFO -    Training Experiment 5
-wandb: wandb.init() called while a run is active and reinit is set to 'default', so returning the previous run.
-2025-09-15 09:59:53 - INFO - Script completed successfully!
