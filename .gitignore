@@ -4,22 +4,20 @@
 # Exclude everything in data subdirectories
 data/raw/*
 data/interim/*
-data/processed/*
-data/external/*
+data/splits/*
 data/results/*
 
 # Exception to the rule - keep .gitkeep files
 !data/raw/.gitkeep
 !data/interim/.gitkeep
-!data/processed/.gitkeep
-!data/external/.gitkeep
+!data/splits.gitkeep
 !data/results/.gitkeep
 
 # Ignore any folder named "deprecated"
 **/deprecated/
 
-# Ignore weights and biases folder
-src/nn/wandb
+# Ignore any "Weights & Biases"-generated folder
+**/wandb/
 
 # Ignore specific file types
 *.nc                      
