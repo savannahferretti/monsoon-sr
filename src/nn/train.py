@@ -9,7 +9,7 @@ import logging
 import warnings
 import numpy as np
 import xarray as xr
-from model import NNModel,TweedieDevianceLoss
+from model import NNModel
 from torch.utils.data import TensorDataset,DataLoader
 
 logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
@@ -39,7 +39,7 @@ def get_criterion(loss):
     '''
     Purpose: Return the appropriate loss function based on configuration.
     Args:
-    - loss (str): 'mse' | 'tweedie'
+    - loss (str): 'mse' | 'mae' 
     Returns:
     - torch.nn.Module: loss function instance
     '''
@@ -47,8 +47,6 @@ def get_criterion(loss):
         return torch.nn.MSELoss()
     elif loss=='mae':
         return torch.nn.L1Loss()
-    elif loss=='tweedie':
-        return TweedieDevianceLoss(p=1.5,epsilon=1e-12)
 
 def reshape(da):
     '''
@@ -59,18 +57,18 @@ def reshape(da):
     - np.ndarray: shape (nsamples, nfeatures); for 3D, nfeatures=1, for 4D, nfeatures equals the size of the 'lev' dimension
     '''
     if 'lev' in da.dims:
+        da  = da.sortby('lev',ascending=False) 
         arr = da.transpose('time','lat','lon','lev').values.reshape(-1,da.lev.size)
     else:
         arr = da.transpose('time','lat','lon').values.reshape(-1,1)
     return arr
 
-def load(splitname,inputvars,uself,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR):
+def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
     Purpose: Load in a normalized training or validation split and build a 2D feature matrix for the NN. 
     Args:
     - splitname (str): 'norm_train' | 'norm_valid'
     - inputvars (list[str]): list of input variables
-    - uself (bool): whether to include land fraction as an input feature
     - landvar (str): land fraction variable name (defaults to LANDVAR)
     - targetvar (str): target variable name (defaults to TARGETVAR)
     - filedir (str): directory containing split files (defaults to FILEDIR)
@@ -81,13 +79,10 @@ def load(splitname,inputvars,uself,landvar=LANDVAR,targetvar=TARGETVAR,filedir=F
         raise ValueError('Splitname must be `norm_train` or `norm_valid`.')
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
-    varlist  = list(inputvars)+[targetvar]
-    if uself:
-        varlist.append(landvar)
+    varlist  = list(inputvars)+[landvar]+[targetvar]
     ds    = xr.open_dataset(filepath,engine='h5netcdf')[varlist]
     Xlist = [reshape(ds[inputvar]) for inputvar in inputvars]
-    if uself:
-        Xlist.append(reshape(ds[landvar]))
+    Xlist.append(reshape(ds[landvar]))
     X = np.concatenate(Xlist,axis=1) if len(Xlist)>1 else Xlist[0]
     y = reshape(ds[targetvar])
     X = torch.tensor(X,dtype=torch.float32)
@@ -118,11 +113,11 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,criterion,batchsize=BATCHSIZE,
     validdataset = TensorDataset(Xvalid,yvalid)
     trainloader  = DataLoader(traindataset,batch_size=batchsize,shuffle=True,num_workers=8,persistent_workers=True,pin_memory=True)
     validloader  = DataLoader(validdataset,batch_size=batchsize,shuffle=False,num_workers=8,persistent_workers=True,pin_memory=True)
-    model      = model.to(device)
-    optimizer  = torch.optim.Adam(model.parameters(),lr=learningrate)
-    scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='min',factor=0.5,patience=patience)
+    model     = model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(),lr=learningrate)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,max_lr=1e-3,epochs=epochs,steps_per_epoch=len(trainloader),pct_start=0.1,anneal_strategy='cos')
     wandb.init(
-        project='Tweedie vs. MSE with Land Fractions',
+        project='All Experiments (LR) with MSE Loss',
         name=runname,
         config={
             'Epochs':epochs,
@@ -143,6 +138,7 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,criterion,batchsize=BATCHSIZE,
             loss = criterion(ybatchpred.squeeze(-1),ybatch.squeeze(-1))
             loss.backward()
             optimizer.step()
+            scheduler.step()
             runningloss += loss.item()*Xbatch.size(0)
         trainloss = runningloss/len(trainloader.dataset)
         model.eval()
@@ -154,7 +150,6 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,criterion,batchsize=BATCHSIZE,
                 loss = criterion(ybatchpred.squeeze(-1),ybatch.squeeze(-1))
                 runningloss += loss.item()*Xbatch.size(0)
         validloss = runningloss/len(validloader.dataset)
-        scheduler.step(validloss)
         improved = validloss<bestloss
         if improved:
             bestloss  = validloss
@@ -210,15 +205,13 @@ if __name__=='__main__':
         for run in RUNS:
             runname  = run['run_name']
             expname  = run['exp_name']
-            uself    = run['use_lf']
             loss     = run['loss']
             exp         = explookup[expname]
             inputvars   = exp['input_vars']
             description = exp['description']
-            lfstr       = 'with' if uself else 'without'
-            logger.info(f'   Training {description} {lfstr} land fraction using {loss.upper()} loss')
-            Xtrain,ytrain = load('norm_train',inputvars,uself)
-            Xvalid,yvalid = load('norm_valid',inputvars,uself)
+            logger.info(f'   Training {description} using {loss.upper()} loss')
+            Xtrain,ytrain = load('norm_train',inputvars)
+            Xvalid,yvalid = load('norm_valid',inputvars)
             model = NNModel(Xtrain.shape[1])
             fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,get_criterion(loss))
             del model,Xtrain,Xvalid,ytrain,yvalid

@@ -7,18 +7,23 @@
     "targetvar":"pr",
     "landvar":"lf"},
   "experiments":[
-    {"exp_name":"bl_only","input_vars":["bl"],"description":"$\\mathit{B_L}$ Only"},
-    {"exp_name":"cape_subsat","input_vars":["cape","subsat"],"description":"$CAPE_L$ & $SUBSAT_L$"},
-    {"exp_name":"q_only","input_vars":["q"],"description":"Specific Humidity Only"}],
+    {"exp_name":"1","input_vars":["bl"],"description":"Experiment 1"},
+    {"exp_name":"2","input_vars":["cape","subsat"],"description":"Experiment 2"},
+    {"exp_name":"3","input_vars":["capeproxy"],"description":"Experiment 3"},
+    {"exp_name":"4","input_vars":["subsatproxy"],"description":"Experiment 4"},
+    {"exp_name":"5","input_vars":["capeproxy","subsatproxy"],"description":"Experiment 5"},
+    {"exp_name":"6","input_vars":["t","q"],"description":"Experiment 6"}],
   "trainparams":{
-      "epochs":5,
-      "batchsize":66240,
-      "learningrate":0.0001,
-      "patience":3},
+      "epochs":20,
+      "batchsize":2208,
+      "learningrate":0.001,
+      "patience":5},
   "evalparams":{
-      "batchsize":33120},
+      "batchsize":2208},
   "runs":[
-    {"run_name":"bl_only_nolf_mse","exp_name":"bl_only","use_lf":false,"loss":"mse"},
-    {"run_name":"bl_only_lf_mse","exp_name":"bl_only","use_lf":true,"loss":"mse"},
-    {"run_name":"bl_only_nolf_mae","exp_name":"bl_only","use_lf":false,"loss":"mae"},
-    {"run_name":"bl_only_lf_mae","exp_name":"bl_only","use_lf":true,"loss":"mae"}]}
+    {"run_name":"exp1_mse","exp_name":"1","loss":"mse"},
+    {"run_name":"exp2_mse","exp_name":"2","loss":"mse"},
+    {"run_name":"exp3_mse","exp_name":"3","loss":"mse"},
+    {"run_name":"exp4_mse","exp_name":"4","loss":"mse"},
+    {"run_name":"exp5_mse","exp_name":"5","loss":"mse"},
+    {"run_name":"exp6_mse","exp_name":"6","loss":"mse"}]}

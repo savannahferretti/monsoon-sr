@@ -37,18 +37,18 @@ def reshape(da):
     - np.ndarray: shape (nsamples, nfeatures); for 3D, nfeatures=1, for 4D, nfeatures equals the size of the 'lev' dimension
     '''
     if 'lev' in da.dims:
+        da  = da.sortby('lev',ascending=False) 
         arr = da.transpose('time','lat','lon','lev').values.reshape(-1,da.lev.size)
     else:
         arr = da.transpose('time','lat','lon').values.reshape(-1,1)
     return arr
     
-def load(splitname,inputvars,uself,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR):
+def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
     Purpose: Load in a normalized training or validation split and build a 2D feature matrix for the NN. 
     Args:
     - splitname (str): 'norm_valid' | 'norm_test'
     - inputvars (list[str]): list of input variables
-    - uself (bool): whether to include land fraction as an input feature
     - landvar (str): land fraction variable name (defaults to LANDVAR)
     - targetvar (str): target variable name (defaults to TARGETVAR)
     - filedir (str): directory containing split files (defaults to FILEDIR)
@@ -59,13 +59,10 @@ def load(splitname,inputvars,uself,landvar=LANDVAR,targetvar=TARGETVAR,filedir=F
         raise ValueError('Splitname must be `norm_valid` or `norm_test`.')
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
-    varlist  = list(inputvars)+[targetvar]
-    if uself:
-        varlist.append(landvar)
+    varlist  = list(inputvars)+[landvar]+[targetvar]
     ds = xr.open_dataset(filepath,engine='h5netcdf')[varlist]
     Xlist = [reshape(ds[inputvar]) for inputvar in inputvars]
-    if uself:
-        Xlist.append(reshape(ds[landvar]))
+    Xlist.append(reshape(ds[landvar]))
     X = np.concatenate(Xlist,axis=1) if len(Xlist)>1 else Xlist[0]
     X = torch.tensor(X,dtype=torch.float32)
     ytemplate = ds[targetvar]
@@ -131,7 +128,7 @@ def predict(model,X,ytemplate,batchsize=BATCHSIZE,device=DEVICE):
     ynormflat = np.concatenate(ypredlist,axis=0)
     ypredflat = denormalize(ynormflat)
     da = xr.DataArray(ypredflat.reshape(ytemplate.shape),dims=ytemplate.dims,coords=ytemplate.coords,name='pr')
-    da.attrs = dict(long_name='NN-predicted precipitation',units='mm/day')
+    da.attrs = dict(long_name='NN-predicted precipitation rate',units='mm/hr')
     return da
 
 def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
@@ -148,15 +145,15 @@ def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
     os.makedirs(resultsdir,exist_ok=True)
     filename = f'nn_{runname}_{splitname}_pr.nc'
     filepath = os.path.join(resultsdir,filename)
-    logger.info(f'Attempting to save {filename}...')
+    logger.info(f'   Attempting to save {filename}...')
     try:
         ypred.to_netcdf(filepath,engine='h5netcdf')
         with xr.open_dataset(filepath,engine='h5netcdf') as _:
             pass
-        logger.info('   File write successful')
+        logger.info('      File write successful')
         return True
     except Exception:
-        logger.exception('   Failed to save or verify')
+        logger.exception('      Failed to save or verify')
         return False
 
 if __name__=='__main__':
@@ -169,14 +166,12 @@ if __name__=='__main__':
         for run in RUNS:
             runname  = run['run_name']
             expname  = run['exp_name']
-            uself    = run['use_lf']
             loss     = run['loss']
             exp         = explookup[expname]
             inputvars   = exp['input_vars']
             description = exp['description']
-            lfstr       = 'with' if uself else 'without'
-            logger.info(f'   Evaluating {description} {lfstr} land fraction using {loss.upper()} loss')
-            X,ytemplate = load(args.split,inputvars,uself)
+            logger.info(f'   Evaluating {description} using {loss.upper()} loss')
+            X,ytemplate = load(args.split,inputvars)
             model = fetch(runname,X.shape[1])
             ypred = predict(model,X,ytemplate)
             save(ypred,runname,args.split)

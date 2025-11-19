@@ -205,18 +205,18 @@ if __name__=='__main__':
         imerg = retrieve_imerg()
         logger.info('Extracting variable data...')
         prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)
+        lfdata = era5.land_sea_mask
         psdata = era5.surface_pressure/100
         tdata  = era5.temperature
         qdata  = era5.specific_humidity
-        lfdata = era5.land_sea_mask
         del era5,imerg
         logger.info('Creating datasets...')
         dslist = [
-            process(prdata,'pr','IMERG V06 precipitation rate','mm/hr',halo=2),
-            process(psdata,'ps','ERA5 surface pressure','hPa',halo=0),
-            process(tdata,'t','ERA5 air temperature','K',halo=0),
-            process(qdata,'q','ERA5 specific humidity','kg/kg',halo=0),
-            process(lfdata,'lf','ERA5 land fraction','0-1',halo=0)]
+            process(prdata,'pr','IMERG V06 precipitation rate','mm/hr',halo=10),
+            process(lfdata,'lf','ERA5 land fraction','0-1',halo=4),
+            process(psdata,'ps','ERA5 surface pressure','hPa',halo=4),
+            process(tdata,'t','ERA5 air temperature','K',halo=4),
+            process(qdata,'q','ERA5 specific humidity','kg/kg',halo=4)]
         del prdata,psdata,tdata,qdata,lfdata
         logger.info('Saving datasets...')
         for ds in dslist:

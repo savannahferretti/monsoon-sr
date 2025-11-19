@@ -12,19 +12,21 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-AUTHOR  = 'Savannah L. Ferretti'      
-EMAIL   = 'savannah.ferretti@uci.edu' 
-FILEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
-SAVEDIR = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
+AUTHOR   = 'Savannah L. Ferretti'      
+EMAIL    = 'savannah.ferretti@uci.edu' 
+FILEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
+SAVEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
+LATRANGE = (5.,25.) 
+LONRANGE = (60.,90.)
 
 def retrieve(longname,filedir=FILEDIR):
     '''
-    Purpose: Lazily import a NetCDF file as an xr.DataArray and, if applicable, ensure pressure levels are ascending (e.g., [500,550,600,...] hPa).
+    Purpose: Lazily import in a NetCDF file as an xr.DataArray and, if applicable, ensure pressure levels are ascending (e.g., [500,550,600,...] hPa).
     Args:
     - longname (str): variable long name/description
     - filedir (str): directory containing the file (defaults to FILEDIR)
     Returns:
-    - xr.DataArray: DataArray with levels ordered (if applicable) 
+    - xr.DataArray: loaded DataArray with levels ordered (if applicable) 
     '''
     filename = f'{longname}.nc'
     filepath = os.path.join(filedir,filename)
@@ -57,22 +59,34 @@ def create_level_mask(refda,ps):
     levmask = (refda.lev<=ps).transpose('time','lat','lon','lev').astype('uint8')
     return levmask
 
-def regrid_and_resample(da,gridtarget,method='conservative'):
+def resample(da):
     '''
     Purpose: Compute a centered hourly mean (uses the two half-hour samples that straddle each hour; falls back to 
-    one at boundaries) and then regrid to a target latitude–longitude grid. Negative values from regirdding artifacts are clipped to 0.
+    one at boundaries).
     Args:
     - da (xr.DataArray): input DataArray
-    - gridtarget (xr.DataArray): DataArray with target 'lat' and 'lon' for regridding
-    - method (str): regridding method (defaults to 'conservative', the best choice for precipitation)
     Returns:
-    - xr.DataArray: DataArray regridded to the target grid at on-the-hour timestamps
+    - xr.DataArray: DataArray resampled at on-the-hour timestamps
     '''
     da = da.rolling(time=2,center=True,min_periods=1).mean()
     da = da.sel(time=da.time.dt.minute==0)
-    regridder = xesmf.Regridder(da,gridtarget,method=method)
+    return da
+    
+def regrid(da,latrange=LATRANGE,lonrange=LONRANGE):
+    '''
+    Purpose: Regrids a DataArray to a 1° target grid.
+    Args:
+    - da (xr.DataArray): input DataArray (with halo)
+    - latrange (tuple[float,float]): target latitude range (defaults to LATRANGE)
+    - lonrange (tuple[float,float]): target longitude range (defaults to LONRANGE)
+    Returns:
+    - xr.DataArray: DataArray regridded to target domain
+    '''
+    targetlats = np.arange(latrange[0],latrange[1]+1,1.)
+    targetlons = np.arange(lonrange[0],lonrange[1]+1,1.)
+    targetgrid = xr.Dataset({'lat':(['lat'],targetlats),'lon':(['lon'],targetlons)})
+    regridder  = xesmf.Regridder(da,targetgrid,method='conservative')
     da = regridder(da,keep_attrs=True)
-    da = da.where(da>=0,0)
     return da
     
 def calc_es(t):
@@ -260,7 +274,7 @@ def dataset(da,shortname,longname,units,author=AUTHOR,email=EMAIL):
     if 'lev' in ds.coords:
         ds.lev.attrs  = dict(long_name='Pressure level',units='hPa')
     ds.attrs = dict(history=f'Created on {datetime.today().strftime("%Y-%m-%d")} by {author} ({email})')
-    logger.info(f'{shortname}: {ds.nbytes*1e-9:.3f} GB')
+    logger.info(f'   {shortname}: {ds.nbytes*1e-9:.3f} GB')
     return ds
     
 def save(ds,savedir=SAVEDIR):
@@ -292,76 +306,48 @@ def save(ds,savedir=SAVEDIR):
 if __name__=='__main__':
     try:
         logger.info('Importing all raw variables...')
-        lf = retrieve('ERA5_land_fraction')
         pr = retrieve('IMERG_V06_precipitation_rate')
+        lf = retrieve('ERA5_land_fraction')
         ps = retrieve('ERA5_surface_pressure')
         t  = retrieve('ERA5_air_temperature')
         q  = retrieve('ERA5_specific_humidity')
-        logger.info('Resampling/regridding precipitation...')
-        resampledpr = regrid_and_resample(pr.load(),ps.load())
-        del pr
-        logger.info('Beginning chunking...')
-        nyears     = len(np.unique(ps.time.dt.year.values))
-        timechunks = np.array_split(np.arange(len(ps.time)),nyears)
-        results    = {
-            'bl':[],
-            'cape':[],
-            'subsat':[],
-            'capeproxy':[],
-            'subsatproxy':[],
-            't':[],
-            'q':[],
-            'levmask':[]}
-        for i,timechunk in enumerate(timechunks):
-            logger.info(f'Processing time chunk {i+1}/{len(timechunks)}...')
-            pschunk = ps.isel(time=timechunk).load()
-            tchunk  = t.isel(time=timechunk).load()
-            qchunk  = q.isel(time=timechunk).load()
-            pchunk  = create_p_array(qchunk)
-            levmaskchunk = create_level_mask(tchunk,pschunk)
-            logger.info('   Calculating equivalent potential temperature terms')
-            thetaechunk     = calc_thetae(pchunk,tchunk,qchunk)
-            thetaesatchunk  = calc_thetae(pchunk,tchunk)
-            thetaesurfchunk = calc_thetae(pchunk,tchunk,qchunk,pschunk)
-            del pchunk        
-            logger.info('   Calculating CAPE-like and SUBSAT-like proxy terms')    
-            capeproxychunk   = thetaesurfchunk-thetaesatchunk
-            subsatproxychunk = thetaesatchunk-thetaechunk
-            del thetaesurfchunk
-            logger.info('   Calculating layer averages')
-            pbltopchunk = pschunk-100.
-            lfttopchunk = xr.full_like(pschunk,500.)
-            thetaebchunk    = calc_layer_average(thetaechunk,pschunk,pbltopchunk)*np.sqrt(-1+2*(pschunk>lfttopchunk))
-            thetaelchunk    = calc_layer_average(thetaechunk,pbltopchunk,lfttopchunk)
-            thetaelsatchunk = calc_layer_average(thetaesatchunk,pbltopchunk,lfttopchunk)
-            wbchunk,wlchunk = calc_weights(pschunk,pbltopchunk,lfttopchunk)
-            del pschunk,pbltopchunk,lfttopchunk,thetaechunk,thetaesatchunk
-            logger.info('   Calculating BL terms')
-            capechunk,subsatchunk,blchunk = calc_bl_terms(thetaebchunk,thetaelchunk,thetaelsatchunk,wbchunk,wlchunk)
-            del wbchunk,wlchunk,thetaebchunk,thetaelchunk,thetaelsatchunk
-            logger.info('   Appending chunk results')
-            results['bl'].append(blchunk)
-            results['cape'].append(capechunk)
-            results['subsat'].append(subsatchunk)
-            results['capeproxy'].append(capeproxychunk)
-            results['subsatproxy'].append(subsatproxychunk)
-            results['t'].append(tchunk)
-            results['q'].append(qchunk)
-            results['levmask'].append(levmaskchunk)
-            del blchunk,capechunk,subsatchunk,capeproxychunk,subsatproxychunk,tchunk,qchunk,levmaskchunk
-        del ps,t,q
+        logger.info('Resampling/regridding variables...')
+        pr = regrid(resample(pr)).clip(min=0).load()
+        lf = regrid(lf).clip(0,1).load()
+        ps = regrid(ps).load()
+        t  = regrid(t).load()
+        q  = regrid(q).load()
+        logger.info('Creating below-surface level mask...')
+        levmask = create_level_mask(t,ps)
+        logger.info('Calculating equivalent potential temperature terms...')
+        p          = create_p_array(q)
+        thetae     = calc_thetae(p,t,q)
+        thetaesat  = calc_thetae(p,t)
+        thetaesurf = calc_thetae(p,t,q,ps)
+        logger.info('Calculating CAPE-like and SUBSAT-like proxy terms...')
+        capeproxy   = thetaesurf-thetaesat
+        subsatproxy = thetaesat-thetae
+        logger.info('Calculating layer averages...')
+        pbltop     = ps-100.
+        lfttop     = xr.full_like(ps,500.)
+        thetaeb    = calc_layer_average(thetae,ps,pbltop)*np.sqrt(-1+2*(ps>lfttop))
+        thetael    = calc_layer_average(thetae,pbltop,lfttop)
+        thetaelsat = calc_layer_average(thetaesat,pbltop,lfttop)
+        wb,wl      = calc_weights(ps,pbltop,lfttop)
+        logger.info('Calculating BL terms...')
+        cape,subsat,bl = calc_bl_terms(thetaeb,thetael,thetaelsat,wb,wl)
         logger.info('Creating datasets...')
         dslist = [
+            dataset(pr,'pr','Precipitation rate','mm/hr'),
             dataset(lf,'lf','Land fraction','0-1'),
-            dataset(resampledpr,'pr','Resampled/regridded precipitation rate','mm/hr'),
-            dataset(xr.concat(results['bl'],dim='time'),'bl','Average buoyancy in the lower troposphere','m/s²'),
-            dataset(xr.concat(results['cape'],dim='time'),'cape','Undilute buoyancy in the lower troposphere','K'),
-            dataset(xr.concat(results['subsat'],dim='time'),'subsat','Lower free-tropospheric subsaturation','K'),
-            dataset(xr.concat(results['capeproxy'],dim='time'),'capeproxy','θₑ(surface) - saturated θₑ(p)','K'),
-            dataset(xr.concat(results['subsatproxy'],dim='time'),'subsatproxy','Saturated θₑ(p) - θₑ(p)','K'), 
-            dataset(xr.concat(results['t'],dim='time'),'t','Air temperature','K'),
-            dataset(xr.concat(results['q'],dim='time'),'q','Specific humidity','kg/kg'),
-            dataset(xr.concat(results['levmask'],dim='time'),'levmask','Below-surface level mask','N/A')]
+            dataset(bl,'bl','Average buoyancy in the lower troposphere','m/s²'),
+            dataset(cape,'cape','Undilute buoyancy in the lower troposphere','K'),
+            dataset(subsat,'subsat', 'Lower free-tropospheric subsaturation','K'),
+            dataset(capeproxy,'capeproxy','θₑ(surface) - saturated θₑ(p)','K'),
+            dataset(subsatproxy,'subsatproxy','Saturated θₑ(p) - θₑ(p)','K'),
+            dataset(t,'t','Air temperature','K'),
+            dataset(q,'q','Specific humidity','kg/kg'),
+            dataset(levmask,'levmask','Below-surface level mask','N/A')]
         logger.info('Saving datasets...')
         for ds in dslist:
             save(ds)
