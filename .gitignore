@@ -8,7 +8,7 @@ data/splits/*
 data/results/*
 !data/raw/.gitkeep
 !data/interim/.gitkeep
-!data/splits.gitkeep
+!data/splits/.gitkeep
 !data/results/.gitkeep
 
 # Ignore specific folder types
