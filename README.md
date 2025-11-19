@@ -1,15 +1,21 @@
-Paper Title
+Data-Driven Discovery of Thermodynamic Controls on South Asian Monsoon Precipitation
 ------------
 
-Savannah L. Ferretti<sup>1</sup>, Michael S. Pritchard<sup>2</sup>, & Jane W. Baldwin<sup>1,3</sup>
+Savannah L. Ferretti<sup>1</sup>, Tom Beucler<sup>2</sup>, Michael S. Pritchard<sup>3</sup>, Sara Shamekh<sup>4</sup>, Fiaz Ahemd<sup>5</sup>, & Jane W. Baldwin<sup>1,6</sup>
 
-<sup>1</sup>Department of Earth System Science, University of California, Irvine, Irvine, CA, USA  
+<sup>1</sup>Department of Earth System Science, University of California Irvine, Irvine, CA, USA  
 
-<sup>2</sup>NVIDIA Corporation, Santa Clara, CA, USA
+<sup>2</sup>Faculty of Geosciences and Environment, University of Lausanne, Lausanne, VD, CH
 
-<sup>3</sup>Lamont-Doherty Earth Observatory, Palisades, NY, USA  
+<sup>3</sup>NVIDIA Corporation, Santa Clara, CA, USA
 
-**Status:** This manuscript has been submitted for publication at ```<JOURNAL>```. The ```<PAPER>``` was published in ```<JOURNAL>``` in ```<MONTH, YEAR>```. ```<SUPPORTING_INFORMATION>``` is also available.  We welcome any comments, questions, or suggestions. Please email your feedback to Savannah L. Ferretti (savannah.ferretti@uci.edu).
+<sup>4</sup>Courant Institute for Mathematical Science, New York University, New York, NY, USA
+
+<sup>5</sup>Department of Atmopsheric and Oceanic Sciences, University of California Los Angeles, Los Angeles, CA, USA
+
+<sup>6</sup>Lamont-Doherty Earth Observatory, Palisades, NY, USA  
+
+**Status:** This manuscript is currently in preparation. We welcome any comments, questions, or suggestions. Please email your feedback to Savannah Ferretti (savannah.ferretti@uci.edu).
 
 **Key Points**:
 - Point 1
@@ -23,28 +29,28 @@ Project Organization
 ```
 ├── LICENSE.md         <- License for code
 │
-├── README.md          <- Top-level information on this code base
+├── README.md          <- Top-level information on this code base/manuscript
 │
 ├── data/
-│   ├── raw/           <- Original immutable data
+│   ├── raw/           <- Original ERA5 and IMERG V06 data
 │   ├── interim/       <- Intermediate data that has been transformed
 │   ├── splits/        <- Training, validation, and test sets
-│   └── results/       <- Model predictions
+│   └── results/       <- Model predictions (and skill metrics)
 │
 ├── figs/              <- Generated figures/graphics 
 │
 ├── models/            
-│   ├── pod/           <- POD models
-│   ├── nn/            <- NN models
-│   └── sr/            <- PySR models
+│   ├── pod/           <- Saved POD models
+│   ├── nn/            <- Saved NN models
+│   └── sr/            <- Saved PySR models
 │
-├── notebooks/         <- Jupyter notebooks for data analysis/visualizations
+├── notebooks/         <- Jupyter notebooks for data analysis and visualizations
 │
-├── src/             
+├── scripts/             
 │   ├── data/          <- Scripts for downloading, and calculating input/target terms, and splitting data
-│   ├── pod/           <- POD model architecture, training, and evalaution scripts
-│   ├── nn/            <- NN model architecture, training, and evalaution scripts
-│   └── sr/            <- TBD
+│   ├── pod/           <- Scripts for training/evaluating the POD (baseline) model
+│   ├── nn/            <- Scripts for training/evaluating the full-profile and kernel NNs
+│   └── sr/            <- Scripts for running PySR and summarizing discovered equations 
 │
 └── environment.yml    <- File for reproducing the analysis environment
 ```
@@ -53,7 +59,7 @@ Acknowledgements
 -------
 
 The analysis for this work has been performed on NERSC's [Perlmutter](https://docs.nersc.gov/systems/perlmutter/architecture/). This research was primarily funded by the DOE's [ASCR](https://www.energy.gov/science/ascr/advanced-scientific-computing-research)
-Program, with additional support from [LEAP NSF-STC](https://leap.columbia.edu/). Additionally, we thank ```<NAME>``` for thair feedback on the first draft.
+Program, with additional support from [LEAP NSF-STC](https://leap.columbia.edu/).
 
 --------
 <p><small>This template is based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>.</small></p>
