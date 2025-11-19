@@ -1,0 +1,1 @@
+{"Training loss":0.14303479308478964,"Stopped early":false,"Best validation loss":0.1320284722717188,"Validation loss":0.13205891257439037,"Epoch":10,"Learning rate":4.000319454128751e-09,"_wandb":{"runtime":458},"_runtime":458,"_timestamp":1.762465194675669e+09,"_step":9,"Best model at epoch":9,"Total training epochs":10,"Training duration (s)":456.5374188423157}

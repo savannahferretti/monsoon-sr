@@ -1,0 +1,14 @@
+{"time":"2025-09-18T16:16:13.746332267-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-09-18T16:16:14.038427162-07:00","level":"INFO","msg":"stream: created new stream","id":"karat98c"}
+{"time":"2025-09-18T16:16:14.040198285-07:00","level":"INFO","msg":"stream: started","id":"karat98c"}
+{"time":"2025-09-18T16:16:14.0402318-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"karat98c"}
+{"time":"2025-09-18T16:16:14.040256447-07:00","level":"INFO","msg":"sender: started","stream_id":"karat98c"}
+{"time":"2025-09-18T16:16:14.040253121-07:00","level":"INFO","msg":"handler: started","stream_id":"karat98c"}
+{"time":"2025-09-18T16:21:00.077448803-07:00","level":"INFO","msg":"api: retrying HTTP error","status":502,"url":"https://api.wandb.ai/files/savannah-research/Precipitation%20NNs/karat98c/file_stream","body":"\n<html><head>\n<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n<title>502 Server Error</title>\n</head>\n<body text=#000000 bgcolor=#ffffff>\n<h1>Error: Server Error</h1>\n<h2>The server encountered a temporary error and could not complete your request.<p>Please try again in 30 seconds.</h2>\n<h2></h2>\n</body></html>\n"}
+{"time":"2025-09-18T16:26:15.434127589-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-09-18T16:26:15.656507606-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-09-18T16:26:15.660899622-07:00","level":"INFO","msg":"stream: closing","id":"karat98c"}
+{"time":"2025-09-18T16:26:15.661164373-07:00","level":"INFO","msg":"handler: closed","stream_id":"karat98c"}
+{"time":"2025-09-18T16:26:15.661176928-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"karat98c"}
+{"time":"2025-09-18T16:26:15.661200042-07:00","level":"INFO","msg":"sender: closed","stream_id":"karat98c"}
+{"time":"2025-09-18T16:26:15.663019928-07:00","level":"INFO","msg":"stream: closed","id":"karat98c"}

@@ -1,0 +1,105 @@
+_wandb:
+    value:
+        cli_version: 0.21.0
+        e:
+            alt3p98bggtxgrcx5v35byskp537u81w:
+                codePath: src/nn/train.py
+                codePathLocal: train.py
+                cpu_count: 64
+                cpu_count_logical: 128
+                cudaVersion: "12.4"
+                disk:
+                    /:
+                        total: "134862778368"
+                        used: "1354301440"
+                email: savannah.ferretti@uci.edu
+                executable: /global/homes/s/sferrett/.conda/envs/monsoon-sr/bin/python
+                git:
+                    commit: 5f8aa46db9dc6d23c98546dd1320dcba0b052b37
+                    remote: https://github.com/savannahferretti/monsoon-sr.git
+                gpu: NVIDIA A100-SXM4-40GB
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 6912
+                      memoryTotal: "42949672960"
+                      name: NVIDIA A100-SXM4-40GB
+                      uuid: GPU-6d4963bd-28df-70ce-3a43-76b3f565a22e
+                host: nid001008
+                memory:
+                    total: "269725560832"
+                os: Linux-5.14.21-150500.55.97_13.0.78-cray_shasta_c-x86_64-with-glibc2.31
+                program: /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn/train.py
+                python: CPython 3.10.18
+                root: /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn
+                slurm:
+                    cluster_name: perlmutter
+                    cpus_on_node: "32"
+                    cpus_per_task: "32"
+                    gpus_on_node: "1"
+                    gtids: "0"
+                    job_account: m4334_g
+                    job_cpus_per_node: "32"
+                    job_end_time: "1761591894"
+                    job_gid: "109311"
+                    job_gpus: "0"
+                    job_id: "44463892"
+                    job_licenses: u1:1
+                    job_name: jupyter
+                    job_nodelist: nid001008
+                    job_num_nodes: "1"
+                    job_partition: shared_urgent_gpu_ss11
+                    job_qos: gpu_shared_jupyter
+                    job_start_time: "1761570294"
+                    job_uid: "109311"
+                    job_user: sferrett
+                    jobid: "44463892"
+                    localid: "0"
+                    mem_per_cpu: "1796"
+                    nnodes: "1"
+                    nodeid: "0"
+                    nodelist: nid001008
+                    nprocs: "1"
+                    ntasks: "1"
+                    ntasks_per_node: "1"
+                    oom_kill_step: "0"
+                    prio_process: "0"
+                    procid: "0"
+                    script_context: prolog_task
+                    stepmgr: nid001008
+                    submit_dir: /global/u1/s/sferrett
+                    submit_host: login27
+                    task_pid: "1119303"
+                    tasks_per_node: "1"
+                    topology_addr: nid001008
+                    topology_addr_pattern: node
+                    tres_bind: gres/gpu:per_task:1
+                    tres_per_task: cpu=32,gres/gpu=1
+                startedAt: "2025-10-27T13:56:20.102640Z"
+                writerId: alt3p98bggtxgrcx5v35byskp537u81w
+        m: []
+        python_version: 3.10.18
+        t:
+            "1":
+                - 1
+                - 54
+            "2":
+                - 1
+                - 54
+            "3":
+                - 2
+                - 13
+                - 16
+                - 62
+            "4": 3.10.18
+            "5": 0.21.0
+            "12": 0.21.0
+            "13": linux-x86_64
+Batch size:
+    value: 66240
+Early stopping patience:
+    value: 3
+Epochs:
+    value: 5
+Initial learning rate:
+    value: 0.0001

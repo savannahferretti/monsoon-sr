@@ -1,0 +1,23 @@
+2025-09-15 10:11:14,438 INFO    MainThread:1788189 [wandb_init.py:setup_run_log_directory():703] Logging user logs to /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn/wandb/run-20250915_101114-z3vvyvhn/logs/debug.log
+2025-09-15 10:11:14,438 INFO    MainThread:1788189 [wandb_init.py:setup_run_log_directory():704] Logging internal logs to /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn/wandb/run-20250915_101114-z3vvyvhn/logs/debug-internal.log
+2025-09-15 10:11:14,438 INFO    MainThread:1788189 [wandb_init.py:init():830] calling init triggers
+2025-09-15 10:11:14,439 INFO    MainThread:1788189 [wandb_init.py:init():835] wandb.init called with sweep_config: {}
+config: {'Epochs': 20, 'Batch size': 66240, 'Initial learning rate': 0.005, 'Early stopping patience': 3, '_wandb': {}}
+2025-09-15 10:11:14,439 INFO    MainThread:1788189 [wandb_init.py:init():871] starting backend
+2025-09-15 10:11:14,439 INFO    MainThread:1788189 [wandb_init.py:init():874] sending inform_init request
+2025-09-15 10:11:14,444 INFO    MainThread:1788189 [wandb_init.py:init():882] backend started and connected
+2025-09-15 10:11:14,448 INFO    MainThread:1788189 [wandb_init.py:init():953] updated telemetry
+2025-09-15 10:11:14,527 INFO    MainThread:1788189 [wandb_init.py:init():977] communicating run to backend with 90.0 second timeout
+2025-09-15 10:11:14,909 INFO    MainThread:1788189 [wandb_init.py:init():1029] starting run threads in backend
+2025-09-15 10:11:16,115 INFO    MainThread:1788189 [wandb_run.py:_console_start():2458] atexit reg
+2025-09-15 10:11:16,116 INFO    MainThread:1788189 [wandb_run.py:_redirect():2306] redirect: wrap_raw
+2025-09-15 10:11:16,116 INFO    MainThread:1788189 [wandb_run.py:_redirect():2375] Wrapping output streams.
+2025-09-15 10:11:16,116 INFO    MainThread:1788189 [wandb_run.py:_redirect():2398] Redirects installed.
+2025-09-15 10:11:16,123 INFO    MainThread:1788189 [wandb_init.py:init():1075] run started, returning control to user process
+2025-09-15 10:15:51,574 INFO    MainThread:1788189 [wandb_run.py:_finish():2224] finishing run savannah-research/Precipitation NNs/z3vvyvhn
+2025-09-15 10:15:51,574 INFO    MainThread:1788189 [wandb_run.py:_atexit_cleanup():2423] got exitcode: 0
+2025-09-15 10:15:51,576 INFO    MainThread:1788189 [wandb_run.py:_restore():2405] restore
+2025-09-15 10:15:51,576 INFO    MainThread:1788189 [wandb_run.py:_restore():2411] restore done
+2025-09-15 10:15:52,421 INFO    MainThread:1788189 [wandb_run.py:_footer_history_summary_info():3903] rendering history
+2025-09-15 10:15:52,421 INFO    MainThread:1788189 [wandb_run.py:_footer_history_summary_info():3935] rendering summary
+2025-09-15 10:15:52,422 INFO    MainThread:1788189 [wandb_run.py:_footer_sync_info():3864] logging synced files

@@ -1,0 +1,6 @@
+{"time":"2025-10-24T10:49:31.769147638-07:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-10-24T10:49:32.070814314-07:00","level":"INFO","msg":"stream: created new stream","id":"rikia61x"}
+{"time":"2025-10-24T10:49:32.071089515-07:00","level":"INFO","msg":"stream: started","id":"rikia61x"}
+{"time":"2025-10-24T10:49:32.0711073-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"rikia61x"}
+{"time":"2025-10-24T10:49:32.071111147-07:00","level":"INFO","msg":"sender: started","stream_id":"rikia61x"}
+{"time":"2025-10-24T10:49:32.071126927-07:00","level":"INFO","msg":"handler: started","stream_id":"rikia61x"}

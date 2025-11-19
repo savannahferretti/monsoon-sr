@@ -1,0 +1,6 @@
+2025-09-15 09:23:02,911 INFO    MainThread:634041 [wandb_init.py:setup_run_log_directory():703] Logging user logs to /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn/wandb/run-20250915_092302-6vvaxd2g/logs/debug.log
+2025-09-15 09:23:02,913 INFO    MainThread:634041 [wandb_init.py:setup_run_log_directory():704] Logging internal logs to /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn/wandb/run-20250915_092302-6vvaxd2g/logs/debug-internal.log
+2025-09-15 09:23:02,913 INFO    MainThread:634041 [wandb_init.py:init():830] calling init triggers
+2025-09-15 09:23:02,914 INFO    MainThread:634041 [wandb_init.py:init():835] wandb.init called with sweep_config: {}
+config: {'Epochs': 20, 'Batch size': 66240, 'Initial learning rate': 0.005, 'Early stopping patience': 3, '_wandb': {}}
+2025-09-15 09:27:42,612 INFO    MsgRouterThr:634041 [mailbox.py:close():129] [no run ID] Closing mailbox, abandoning 1 handles.

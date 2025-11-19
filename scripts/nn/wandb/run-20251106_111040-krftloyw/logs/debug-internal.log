@@ -1,0 +1,13 @@
+{"time":"2025-11-06T11:10:40.326305801-08:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-11-06T11:10:40.600921685-08:00","level":"INFO","msg":"stream: created new stream","id":"krftloyw"}
+{"time":"2025-11-06T11:10:40.601253218-08:00","level":"INFO","msg":"stream: started","id":"krftloyw"}
+{"time":"2025-11-06T11:10:40.601261765-08:00","level":"INFO","msg":"writer: Do: started","stream_id":"krftloyw"}
+{"time":"2025-11-06T11:10:40.601269019-08:00","level":"INFO","msg":"sender: started","stream_id":"krftloyw"}
+{"time":"2025-11-06T11:10:40.601276634-08:00","level":"INFO","msg":"handler: started","stream_id":"krftloyw"}
+{"time":"2025-11-06T11:14:37.366368337-08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-11-06T11:14:37.541851731-08:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-11-06T11:14:37.546036135-08:00","level":"INFO","msg":"stream: closing","id":"krftloyw"}
+{"time":"2025-11-06T11:14:37.546323612-08:00","level":"INFO","msg":"handler: closed","stream_id":"krftloyw"}
+{"time":"2025-11-06T11:14:37.546355724-08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"krftloyw"}
+{"time":"2025-11-06T11:14:37.546381915-08:00","level":"INFO","msg":"sender: closed","stream_id":"krftloyw"}
+{"time":"2025-11-06T11:14:37.555519683-08:00","level":"INFO","msg":"stream: closed","id":"krftloyw"}

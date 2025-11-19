@@ -1,0 +1,123 @@
+_wandb:
+    value:
+        cli_version: 0.21.0
+        e:
+            ygi4aua7rx9icnxyuh6bf5txx7be9953:
+                codePath: src/nn/train_old.py
+                codePathLocal: train_old.py
+                cpu_count: 64
+                cpu_count_logical: 128
+                cudaVersion: "12.4"
+                disk:
+                    /:
+                        total: "134862782464"
+                        used: "794038272"
+                email: savannah.ferretti@uci.edu
+                executable: /global/homes/s/sferrett/.conda/envs/monsoon-sr/bin/python
+                git:
+                    commit: 3f8a274b0578fcb52d929e51820f80a5a353528d
+                    remote: https://github.com/savannahferretti/monsoon-sr.git
+                gpu: NVIDIA A100-SXM4-40GB
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 6912
+                      memoryTotal: "42949672960"
+                      name: NVIDIA A100-SXM4-40GB
+                      uuid: GPU-601203c2-ddd0-5bdf-7a78-4d3045f13771
+                host: nid001277
+                memory:
+                    total: "269725569024"
+                os: Linux-5.14.21-150500.55.97_13.0.78-cray_shasta_c-x86_64-with-glibc2.31
+                program: /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn/train_old.py
+                python: CPython 3.10.18
+                root: /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn
+                slurm:
+                    cluster_name: perlmutter
+                    cpu_bind: quiet,mask_cpu:0x000000000000FFFF000000000000FFFF
+                    cpu_bind_list: 0x000000000000FFFF000000000000FFFF
+                    cpu_bind_type: 'mask_cpu:'
+                    cpu_bind_verbose: quiet
+                    cpus_on_node: "32"
+                    cpus_per_task: "32"
+                    distribution: cyclic
+                    gpus_on_node: "1"
+                    gtids: "0"
+                    job_account: m4334_g
+                    job_cpus_per_node: "32"
+                    job_end_time: "1757974634"
+                    job_gid: "109311"
+                    job_gpus: "0"
+                    job_id: "42813482"
+                    job_licenses: cfs:1
+                    job_name: train
+                    job_nodelist: nid001277
+                    job_num_nodes: "1"
+                    job_partition: shared_gpu_ss11
+                    job_qos: gpu_shared
+                    job_start_time: "1757953034"
+                    job_uid: "109311"
+                    job_user: sferrett
+                    jobid: "42813482"
+                    launch_node_ipaddr: 128.55.67.82
+                    localid: "0"
+                    mem_per_cpu: "1796"
+                    mpi_type: cray_shasta
+                    nnodes: "1"
+                    nodeid: "0"
+                    nodelist: nid001277
+                    nprocs: "1"
+                    ntasks: "1"
+                    ntasks_per_node: "1"
+                    oom_kill_step: "0"
+                    prio_process: "0"
+                    procid: "0"
+                    script_context: prolog_task
+                    srun_comm_host: 128.55.67.82
+                    srun_comm_port: "36109"
+                    step_gpus: "0"
+                    step_id: "0"
+                    step_launcher_port: "36109"
+                    step_nodelist: nid001277
+                    step_num_nodes: "1"
+                    step_num_tasks: "1"
+                    step_resv_ports: 63919-63920
+                    step_tasks_per_node: "1"
+                    stepid: "0"
+                    stepmgr: nid001277
+                    submit_dir: /global/cfs/cdirs/m4334/sferrett/monsoon-sr/src/nn
+                    submit_host: nid004168
+                    task_pid: "634041"
+                    tasks_per_node: "1"
+                    topology_addr: nid001277
+                    topology_addr_pattern: node
+                    tres_per_task: cpu=32
+                    umask: "0002"
+                startedAt: "2025-09-15T16:18:09.961972Z"
+                writerId: ygi4aua7rx9icnxyuh6bf5txx7be9953
+        m: []
+        python_version: 3.10.18
+        t:
+            "1":
+                - 1
+                - 54
+            "2":
+                - 1
+                - 54
+            "3":
+                - 13
+                - 16
+                - 24
+                - 62
+            "4": 3.10.18
+            "5": 0.21.0
+            "12": 0.21.0
+            "13": linux-x86_64
+Batch size:
+    value: 66240
+Early stopping patience:
+    value: 3
+Epochs:
+    value: 20
+Initial learning rate:
+    value: 0.005

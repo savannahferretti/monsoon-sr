@@ -1,29 +1,32 @@
-name: monsoon-sr
+name: monsoon-discovery
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
-  - ipykernel
+  - adlfs
   - basemap
   - bottleneck
   - cartopy
   - dask
+  - fsspec
+  - gcsfs
+  - h5py
+  - ipykernel
+  - julia
   - matplotlib
   - netcdf4
+  - numba
   - numpy
+  - pandas
+  - planetary-computer
   - proplot
-  - scipy
-  - sympy
-  - xarray
-  - zarr
-  - julia
+  - pysr
+  - pystac-client
+  - python=3.10
   - pytorch
   - scikit-learn
-  - adlfs
-  - gcsfs
-  - fsspec
-  - planetary-computer
-  - pystac-client
-  - numba
+  - scipy
+  - sympy
+  - wandb
+  - xarray
   - xesmf
-prefix: /global/homes/s/sferrett/.conda/envs/monsoon-sr
+  - zarr

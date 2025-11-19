@@ -1,0 +1,13 @@
+{"time":"2025-11-06T11:19:14.17988578-08:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-11-06T11:19:14.460172415-08:00","level":"INFO","msg":"stream: created new stream","id":"ruisf8gl"}
+{"time":"2025-11-06T11:19:14.460492075-08:00","level":"INFO","msg":"stream: started","id":"ruisf8gl"}
+{"time":"2025-11-06T11:19:14.460538785-08:00","level":"INFO","msg":"writer: Do: started","stream_id":"ruisf8gl"}
+{"time":"2025-11-06T11:19:14.460582149-08:00","level":"INFO","msg":"handler: started","stream_id":"ruisf8gl"}
+{"time":"2025-11-06T11:19:14.460576809-08:00","level":"INFO","msg":"sender: started","stream_id":"ruisf8gl"}
+{"time":"2025-11-06T11:24:41.639672795-08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-11-06T11:24:41.894619556-08:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-11-06T11:24:41.899539415-08:00","level":"INFO","msg":"stream: closing","id":"ruisf8gl"}
+{"time":"2025-11-06T11:24:41.899786274-08:00","level":"INFO","msg":"handler: closed","stream_id":"ruisf8gl"}
+{"time":"2025-11-06T11:24:41.899808487-08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"ruisf8gl"}
+{"time":"2025-11-06T11:24:41.899835579-08:00","level":"INFO","msg":"sender: closed","stream_id":"ruisf8gl"}
+{"time":"2025-11-06T11:24:41.906237112-08:00","level":"INFO","msg":"stream: closed","id":"ruisf8gl"}
