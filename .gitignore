@@ -1,6 +1,3 @@
-# Ignore Jupyter checkpoint files
-**/.ipynb_checkpoints/     
-
 # Ignore everything in data subdirectories except .gitkeep files
 data/raw/*
 data/interim/*
@@ -12,6 +9,7 @@ data/results/*
 !data/results/.gitkeep
 
 # Ignore specific folder types
+**/.ipynb_checkpoints/ 
 **/deprecated/
 **/wandb/
 
