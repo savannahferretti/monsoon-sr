@@ -22,12 +22,12 @@ warnings.filterwarnings('ignore')
 
 AUTHOR    = 'Savannah L. Ferretti'
 EMAIL     = 'savannah.ferretti@uci.edu'
-SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
+SAVEDIR   = '/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/raw'
 YEARS     = [2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020]
 MONTHS    = [6,7,8]
-LATRANGE  = (5.,25.) 
-LONRANGE  = (60.,90.)
-LEVRANGE  = (500.,1000.)
+LATRANGE  = (5.0,25.0) 
+LONRANGE  = (60.0,90.0)
+LEVRANGE  = (500.0,1000.0)
 
 def retrieve_era5():
     '''
@@ -86,7 +86,7 @@ def standardize(da):
         else:
             da.coords[dim] = da.coords[dim].astype('float32')
             if dim=='lon':
-                da.coords[dim] = (da.coords[dim]+180)%360-180
+                da.coords[dim] = (da.coords[dim]+180.0)%360.0-180.0
     da = da.sortby(targetdims).transpose(*targetdims)   
     return da
     
@@ -199,29 +199,25 @@ def save(ds,savedir=SAVEDIR):
         return False
 
 if __name__=='__main__':
-    try:
-        logger.info('Retrieving ERA5 and IMERG data...')
-        era5  = retrieve_era5()
-        imerg = retrieve_imerg()
-        logger.info('Extracting variable data...')
-        prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)
-        lfdata = era5.land_sea_mask
-        psdata = era5.surface_pressure/100
-        tdata  = era5.temperature
-        qdata  = era5.specific_humidity
-        del era5,imerg
-        logger.info('Creating datasets...')
-        dslist = [
-            process(prdata,'pr','IMERG V06 precipitation rate','mm/hr',halo=10),
-            process(lfdata,'lf','ERA5 land fraction','0-1',halo=4),
-            process(psdata,'ps','ERA5 surface pressure','hPa',halo=4),
-            process(tdata,'t','ERA5 air temperature','K',halo=4),
-            process(qdata,'q','ERA5 specific humidity','kg/kg',halo=4)]
-        del prdata,psdata,tdata,qdata,lfdata
-        logger.info('Saving datasets...')
-        for ds in dslist:
-            save(ds)
-            del ds
-        logger.info('Script execution completed successfully!')
-    except Exception as e:
-        logger.error(f'An unexpected error occurred: {str(e)}')
+    logger.info('Retrieving ERA5 and IMERG data...')
+    era5  = retrieve_era5()
+    imerg = retrieve_imerg()
+    logger.info('Extracting variable data...')
+    prdata = imerg.precipitationCal.where((imerg.precipitationCal!=-9999.9)&(imerg.precipitationCal>=0),np.nan)
+    lfdata = era5.land_sea_mask
+    psdata = era5.surface_pressure/100.0
+    tdata  = era5.temperature
+    qdata  = era5.specific_humidity
+    del era5,imerg
+    logger.info('Creating datasets...')
+    dslist = [
+        process(prdata,'pr','IMERG V06 precipitation rate','mm/hr',halo=10),
+        process(lfdata,'lf','ERA5 land fraction','0-1',halo=4),
+        process(psdata,'ps','ERA5 surface pressure','hPa',halo=4),
+        process(tdata,'t','ERA5 air temperature','K',halo=4),
+        process(qdata,'q','ERA5 specific humidity','kg/kg',halo=4)]
+    del prdata,lfdata,psdata,tdata,qdata
+    logger.info('Saving datasets...')
+    for ds in dslist:
+        save(ds)
+        del ds

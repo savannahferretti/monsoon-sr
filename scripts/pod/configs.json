@@ -1,8 +1,8 @@
 {
   "paths":{
-    "filedir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/splits",
-    "modeldir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/models/pod",
-    "resultsdir":"/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/results"},
+    "filedir":"/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/splits",
+    "modeldir":"/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/models/pod",
+    "resultsdir":"/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/results"},
   "dataparams":{
     "inputvar":"bl",
     "targetvar":"pr",
@@ -16,5 +16,5 @@
     "prmin":1.0,
     "prmax":5.0},
   "runs":[
-    {"run_name":"single_fit","mode":"pooled","description":"Single Fit"},
-    {"run_name":"separate_fit","mode":"regional","description":"Separate Land/Ocean Fits"}]}
+    {"run_name":"one_fit","mode":"pooled","description":"Singular Fit"},
+    {"run_name":"two_fit","mode":"regional","description":"Separate Land & Ocean Fits"}]}

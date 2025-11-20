@@ -124,7 +124,7 @@ def save(model,diagnostics,runname,modeldir=MODELDIR):
     os.makedirs(modeldir,exist_ok=True)
     filename = f'pod_{runname}.npz'
     filepath = os.path.join(modeldir,filename)
-    logger.info(f'   Attempting to save {filename}...')
+    logger.info(f'      Attempting to save {filename}...')
     try:
         if model.mode=='pooled':
             np.savez(filepath,
@@ -150,25 +150,21 @@ def save(model,diagnostics,runname,modeldir=MODELDIR):
                      nparams=np.int32(model.nparams))
         with np.load(filepath) as _:
             pass
-        logger.info('      File write successful')
+        logger.info('         File write successful')
         return True
     except Exception:
-        logger.exception('      Failed to save or verify')
+        logger.exception('         Failed to save or verify')
         return False
 
 if __name__=='__main__':
-    try:
-        logger.info('Loading training + validation data splits combined...')
-        x,y,lf = load()
-        logger.info('Training and saving ramp-fit POD models...')
-        for run in RUNCONFIGS:
-            runname     = run['run_name']
-            mode        = run['mode']
-            description = run['description']
-            logger.info(f'   Training {description}')
-            model,diagnostics = fit(mode,x,y,lf)
-            save(model,diagnostics,runname)
-            del model,diagnostics
-        logger.info('Script execution completed successfully!')
-    except Exception as e:
-        logger.error(f'An unexpected error occurred: {str(e)}')
+    logger.info('Loading training + validation data splits combined...')
+    x,y,lf = load()
+    logger.info('Training and saving ramp-fit POD models...')
+    for run in RUNCONFIGS:
+        runname     = run['run_name']
+        mode        = run['mode']
+        description = run['description']
+        logger.info(f'   Training {description}')
+        model,diagnostics = fit(mode,x,y,lf)
+        save(model,diagnostics,runname)
+        del model,diagnostics

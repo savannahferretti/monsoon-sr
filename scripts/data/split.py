@@ -10,9 +10,9 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-FILEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
-SAVEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/splits'
-INPUTVARS   = ['lf','bl','cape','subsat','capeproxy','subsatproxy','t','q','levmask']
+FILEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/interim'
+SAVEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/splits'
+INPUTVARS   = ['lf','bl','cape','subsat','t','q','thetaeprime','thetaeplus','levmask']
 TARGETVAR   = 'pr'
 TRAINRANGE  = ('2000','2014')
 VALIDRANGE  = ('2015','2017')
@@ -85,27 +85,24 @@ def save(plan,savedir=SAVEDIR):
     os.makedirs(savedir,exist_ok=True)
     filename = f'{plan["split"]}.h5'
     filepath = os.path.join(savedir,filename)
-    logger.info(f'Attempting to save {filename}...')
+    logger.info(f'   Attempting to save {filename}...')
     try:
         plan['ds'].to_netcdf(filepath,engine='h5netcdf',encoding=plan['encoding'])
         with h5py.File(filepath,'r') as _:
             pass
-        logger.info('   File write successful')
+        logger.info('      File write successful')
         return True
     except Exception:
-        logger.exception('   Failed to save or verify')
+        logger.exception('      Failed to save or verify')
         return False
 
 if __name__=='__main__':
-    try:
-        logger.info('Creating split plans and saving...')
-        planlist = [
-            split('train',TRAINRANGE),
-            split('valid',VALIDRANGE),
-            split('test',TESTRANGE)]
-        for plan in planlist:
-            save(plan)
-            del plan
-        logger.info('Script execution completed successfully!')
-    except Exception as e:
-        logger.error(f'An unexpected error occurred: {str(e)}')
+    logger.info('Creating split plans...')
+    planlist = [
+        split('train',TRAINRANGE),
+        split('valid',VALIDRANGE),
+        split('test',TESTRANGE)]
+    logger.info('Saving data splits...')
+    for plan in planlist:
+        save(plan)
+        del plan

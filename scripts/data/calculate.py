@@ -14,10 +14,10 @@ warnings.filterwarnings('ignore')
 
 AUTHOR   = 'Savannah L. Ferretti'      
 EMAIL    = 'savannah.ferretti@uci.edu' 
-FILEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/raw'
-SAVEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/interim'
-LATRANGE = (5.,25.) 
-LONRANGE = (60.,90.)
+FILEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/raw'
+SAVEDIR  = '/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/interim'
+LATRANGE = (5.0,25.0) 
+LONRANGE = (60.0,90.0)
 
 def retrieve(longname,filedir=FILEDIR):
     '''
@@ -74,7 +74,7 @@ def resample(da):
     
 def regrid(da,latrange=LATRANGE,lonrange=LONRANGE):
     '''
-    Purpose: Regrids a DataArray to a 1° target grid.
+    Purpose: Regrids a DataArray to a 1° x 1° target grid.
     Args:
     - da (xr.DataArray): input DataArray (with halo)
     - latrange (tuple[float,float]): target latitude range (defaults to LATRANGE)
@@ -82,8 +82,8 @@ def regrid(da,latrange=LATRANGE,lonrange=LONRANGE):
     Returns:
     - xr.DataArray: DataArray regridded to target domain
     '''
-    targetlats = np.arange(latrange[0],latrange[1]+1,1.)
-    targetlons = np.arange(lonrange[0],lonrange[1]+1,1.)
+    targetlats = np.arange(latrange[0],latrange[1]+1.0,1.0)
+    targetlons = np.arange(lonrange[0],lonrange[1]+1.0,1.0)
     targetgrid = xr.Dataset({'lat':(['lat'],targetlats),'lon':(['lon'],targetlons)})
     regridder  = xesmf.Regridder(da,targetgrid,method='conservative')
     da = regridder(da,keep_attrs=True)
@@ -98,9 +98,9 @@ def calc_es(t):
     - xr.DataArray: eₛ DataArray (hPa)
     '''    
     tc = t-273.15
-    eswat = np.exp(34.494-(4924.99/(tc+237.1)))/((tc+105.)**1.57)
-    esice = np.exp(43.494-(6545.8/(tc+278.)))/((tc+868.)**2.)
-    es = xr.where(tc>0.,eswat,esice)/100.
+    eswat = np.exp(34.494-(4924.99/(tc+237.1)))/((tc+105.0)**1.57)
+    esice = np.exp(43.494-(6545.8/(tc+278.0)))/((tc+868.0)**2.0)
+    es = xr.where(tc>0.0,eswat,esice)/100.0
     return es
 
 def calc_qs(p,t):
@@ -116,7 +116,7 @@ def calc_qs(p,t):
     rd = 287.04   
     epsilon = rd/rv
     es = calc_es(t) 
-    qs = (epsilon*es)/(p-es*(1.-epsilon))
+    qs = (epsilon*es)/(p-es*(1.0-epsilon))
     return qs
 
 def calc_thetae(p,t,q=None,ps=None):
@@ -130,7 +130,7 @@ def calc_thetae(p,t,q=None,ps=None):
     - ps (xr.DataArray, optional): surface pressure DataArray (hPa); if given, θₑ at the surface will be calculated
       (ps > 1,000 hPa are clamped to 1,000 hPa to prevent extrapolation beyond the available pressure levels from ERA5)
     Returns:
-    - xr.DataArray: (regular, surface, or saturated) θₑ DataArray (K)
+    - xr.DataArray: (unsaturated, saturated, and/or surface) θₑ DataArray (K)
     '''
     if q is None:
         q = calc_qs(p,t)
@@ -139,14 +139,14 @@ def calc_thetae(p,t,q=None,ps=None):
         t = t.interp(lev=psclamped)
         q = q.interp(lev=psclamped)
         p = psclamped
-    p0 = 1000.  
+    p0 = 1000.0  
     rv = 461.5  
     rd = 287.04
     epsilon = rd/rv
-    r  = q/(1.-q) 
+    r  = q/(1.0-q) 
     e  = (p*r)/(epsilon+r)
-    tl = 2840./(3.5*np.log(t)-np.log(e)-4.805)+55.
-    thetae = t*(p0/p)**(0.2854*(1.-0.28*r))*np.exp((3.376/tl-0.00254)*1000.*r*(1.+0.81*r))
+    tl = 2840.0/(3.5*np.log(t)-np.log(e)-4.805)+55.0
+    thetae = t*(p0/p)**(0.2854*(1.0-0.28*r))*np.exp((3.376/tl-0.00254)*1000.0*r*(1.0+0.81*r))
     return thetae
 
 def get_level_above(ptarget,levels,side):
@@ -225,7 +225,7 @@ def calc_weights(ps,pbltop,lfttop):
     pblthickness = ps-pbltop
     lftthickness = pbltop-lfttop
     wb = (pblthickness/lftthickness)*np.log((pblthickness+lftthickness)/pblthickness)
-    wl = 1-wb
+    wl = 1.0-wb
     return wb,wl
 
 def calc_bl_terms(thetaeb,thetael,thetaelsat,wb,wl):
@@ -234,15 +234,15 @@ def calc_bl_terms(thetaeb,thetael,thetaelsat,wb,wl):
     Args:
     - thetaeb (xr.DataArray): DataArray of θₑ averaged over the PBL (K)
     - thetael (xr.DataArray): DataArray of θₑ averaged over the LFT (K)
-    - thetaelsat (xr.DataArray): DataArray of saturated θₑ averaged over the LFT (K)
+    - thetaelstar (xr.DataArray): DataArray of saturated θₑ averaged over the LFT (K)
     - wb (xr.DataArray): DataArray of PBL weights
     - wl (xr.DataArray): DataArray of LFT weights
     Returns:
     - tuple[xr.DataArray,xr.DataArray,xr.DataArray]: CAPEL, SUBSATL, and BL DataArrays
     '''
     g       = 9.81
-    kappal  = 3.
-    thetae0 = 340.
+    kappal  = 3.0
+    thetae0 = 340.0
     cape    = ((thetaeb-thetaelsat)/thetaelsat)*thetae0
     subsat  = ((thetaelsat-thetael)/thetaelsat)*thetae0
     bl      = (g/(kappal*thetae0))*((wb*cape)-(wl*subsat))
@@ -304,54 +304,49 @@ def save(ds,savedir=SAVEDIR):
         return False
 
 if __name__=='__main__':
-    try:
-        logger.info('Importing all raw variables...')
-        pr = retrieve('IMERG_V06_precipitation_rate')
-        lf = retrieve('ERA5_land_fraction')
-        ps = retrieve('ERA5_surface_pressure')
-        t  = retrieve('ERA5_air_temperature')
-        q  = retrieve('ERA5_specific_humidity')
-        logger.info('Resampling/regridding variables...')
-        pr = regrid(resample(pr)).clip(min=0).load()
-        lf = regrid(lf).clip(0,1).load()
-        ps = regrid(ps).load()
-        t  = regrid(t).load()
-        q  = regrid(q).load()
-        logger.info('Creating below-surface level mask...')
-        levmask = create_level_mask(t,ps)
-        logger.info('Calculating equivalent potential temperature terms...')
-        p          = create_p_array(q)
-        thetae     = calc_thetae(p,t,q)
-        thetaesat  = calc_thetae(p,t)
-        thetaesurf = calc_thetae(p,t,q,ps)
-        logger.info('Calculating CAPE-like and SUBSAT-like proxy terms...')
-        capeproxy   = thetaesurf-thetaesat
-        subsatproxy = thetaesat-thetae
-        logger.info('Calculating layer averages...')
-        pbltop     = ps-100.
-        lfttop     = xr.full_like(ps,500.)
-        thetaeb    = calc_layer_average(thetae,ps,pbltop)*np.sqrt(-1+2*(ps>lfttop))
-        thetael    = calc_layer_average(thetae,pbltop,lfttop)
-        thetaelsat = calc_layer_average(thetaesat,pbltop,lfttop)
-        wb,wl      = calc_weights(ps,pbltop,lfttop)
-        logger.info('Calculating BL terms...')
-        cape,subsat,bl = calc_bl_terms(thetaeb,thetael,thetaelsat,wb,wl)
-        logger.info('Creating datasets...')
-        dslist = [
-            dataset(pr,'pr','Precipitation rate','mm/hr'),
-            dataset(lf,'lf','Land fraction','0-1'),
-            dataset(bl,'bl','Average buoyancy in the lower troposphere','m/s²'),
-            dataset(cape,'cape','Undilute buoyancy in the lower troposphere','K'),
-            dataset(subsat,'subsat', 'Lower free-tropospheric subsaturation','K'),
-            dataset(capeproxy,'capeproxy','θₑ(surface) - saturated θₑ(p)','K'),
-            dataset(subsatproxy,'subsatproxy','Saturated θₑ(p) - θₑ(p)','K'),
-            dataset(t,'t','Air temperature','K'),
-            dataset(q,'q','Specific humidity','kg/kg'),
-            dataset(levmask,'levmask','Below-surface level mask','N/A')]
-        logger.info('Saving datasets...')
-        for ds in dslist:
-            save(ds)
-            del ds
-        logger.info('Script execution completed successfully!')
-    except Exception as e:
-        logger.error(f'An unexpected error occurred: {str(e)}')
+    logger.info('Importing all raw variables...')
+    pr = retrieve('IMERG_V06_precipitation_rate')
+    lf = retrieve('ERA5_land_fraction')
+    ps = retrieve('ERA5_surface_pressure')
+    t  = retrieve('ERA5_air_temperature')
+    q  = retrieve('ERA5_specific_humidity')
+    logger.info('Resampling/regridding variables...')
+    pr = regrid(resample(pr)).clip(min=0).load()
+    lf = regrid(lf).clip(0,1).load()
+    ps = regrid(ps).load()
+    t  = regrid(t).load()
+    q  = regrid(q).load()
+    logger.info('Creating below-surface level mask...')
+    levmask = create_level_mask(t,ps)
+    logger.info('Calculating equivalent potential temperature terms...')
+    p           = create_p_array(q)
+    thetae      = calc_thetae(p,t,q)
+    thetaestar  = calc_thetae(p,t)
+    thetaesurf  = calc_thetae(p,t,q,ps)
+    thetaeprime = thetaesurf-thetaestar
+    thetaeplus  = thetaestar-thetae    
+    logger.info('Calculating layer averages...')
+    pbltop      = ps-100.0
+    lfttop      = xr.full_like(ps,500.0)
+    thetaeb     = calc_layer_average(thetae,ps,pbltop)*np.sqrt(-1+2*(ps>lfttop))
+    thetael     = calc_layer_average(thetae,pbltop,lfttop)
+    thetaelstar = calc_layer_average(thetaestar,pbltop,lfttop)
+    logger.info('Calculating BL terms...')
+    wb,wl          = calc_weights(ps,pbltop,lfttop)
+    cape,subsat,bl = calc_bl_terms(thetaeb,thetael,thetaelstar,wb,wl)
+    logger.info('Creating datasets...')
+    dslist = [
+        dataset(pr,'pr','Precipitation rate','mm/hr'),
+        dataset(lf,'lf','Land fraction','0-1'),
+        dataset(bl,'bl','Average buoyancy in the lower troposphere','m/s²'),
+        dataset(cape,'cape','Undilute buoyancy in the lower troposphere','K'),
+        dataset(subsat,'subsat', 'Lower free-tropospheric subsaturation','K'),
+        dataset(levmask,'levmask','Below-surface level mask','N/A'),
+        dataset(t,'t','Air temperature','K'),
+        dataset(q,'q','Specific humidity','kg/kg'),
+        dataset(thetaeprime,'thetaeprime','Surface equivalent potential temperature minus saturated equivalent potential temperature','K'),
+        dataset(thetaeplus,'thetaeplus','Difference between saturated and unsaturated equivalent potential temperature','K')]
+    logger.info('Saving datasets...')
+    for ds in dslist:
+        save(ds)
+        del ds

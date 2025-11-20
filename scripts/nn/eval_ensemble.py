@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import glob
 import json
 import torch
 import logging
@@ -45,9 +46,9 @@ def reshape(da):
     
 def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
-    Purpose: Load in a normalized training or validation split and build a 2D feature matrix for the NN. 
+    Purpose: Load in a normalized validation or test split and build a 2D feature matrix for the NN. 
     Args:
-    - splitname (str): 'norm_valid' | 'norm_test'
+    - splitname (str): 'normvalid' | 'normtest'
     - inputvars (list[str]): list of input variables
     - landvar (str): land fraction variable name (defaults to LANDVAR)
     - targetvar (str): target variable name (defaults to TARGETVAR)
@@ -55,8 +56,8 @@ def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR
     Returns:
     - tuple[torch.FloatTensor,xr.DataArray]: 2D input tensor and target DataArray (for reshaping predictions)
     '''
-    if splitname not in ('norm_valid','norm_test'):
-        raise ValueError('Splitname must be `norm_valid` or `norm_test`.')
+    if splitname not in ('normvalid','normtest'):
+        raise ValueError('Splitname must be `normvalid` or `normtest`.')
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
     varlist  = list(inputvars)+[landvar]+[targetvar]
@@ -68,21 +69,31 @@ def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR
     ytemplate = ds[targetvar]
     return X,ytemplate
 
-def fetch(runname,inputsize,device=DEVICE,modeldir=MODELDIR):
+def get_checkpoints(runname,modeldir=MODELDIR):
     '''
-    Purpose: Rebuild a trained NN model.
+    Purpose: Return a sorted list of checkpoint filepaths for a given model run.
     Args:
     - runname (str): model run name
+    - modeldir (str): directory with saved model checkpoints (defaults to MODELDIR)
+    Returns:
+    - list[str]: list of checkpoint filepaths matching the run name
+    '''
+    pattern     = os.path.join(modeldir,f'nn_{runname}_epoch*.pth')
+    checkpoints = sorted(glob.glob(pattern))
+    return checkpoints
+
+def fetch(checkpoint,inputsize,device=DEVICE):
+    '''
+    Purpose: Rebuild a trained NN model from a specific checkpoint file.
+    Args:
+    - checkpoint (str): full filepath to a saved checkpoint file
     - inputsize (int): number of input features to initialize NNModel
     - device (str): 'cuda' or 'cpu' device for model evaluation (defaults to DEVICE)
-    - modeldir (str): directory with saved models (defaults to MODELDIR)
     Returns:
     - NNModel: model on 'device' with loaded state_dict (weights)
     '''
-    filename = f'nn_{runname}.pth'
-    filepath = os.path.join(modeldir,filename)
     model = NNModel(inputsize).to(device)
-    state = torch.load(filepath,map_location=device)
+    state = torch.load(checkpoint,map_location=device)
     model.load_state_dict(state)
     return model
 
@@ -110,7 +121,7 @@ def predict(model,X,ytemplate,batchsize=BATCHSIZE,device=DEVICE):
     Args:
     - model (NNModel): trained/loaded NN model
     - X (torch.Tensor): 2D input tensor
-    - ytemplate (xr.DataArray): template with dimension/coordinates to reshape predictions
+    - ytemplate (xr.DataArray): template with dimensions/coordinates to reshape predictions
     - batchsize (int): inference batch size (defaults to BATCHSIZE)
     - device (str): 'cuda' or 'cpu' device for model evaluation (defaults to DEVICE)
     Returns:
@@ -133,10 +144,10 @@ def predict(model,X,ytemplate,batchsize=BATCHSIZE,device=DEVICE):
 
 def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
     '''
-    Purpose: Save an xr.DataArray of predicted precipitation to a NetCDF file, then verify the write by reopening.
+    Purpose: Save an xr.DataArray of predicted precipitation (or derived ensemble statistic) to a NetCDF file, then verify the write by reopening.
     Args:
-    - ypred (xr.DataArray): 3D DataArray of predicted precipitation
-    - runname (str): model run name
+    - ypred (xr.DataArray): 3D DataArray of predicted precipitation or an ensemble statistic
+    - runname (str): model run name (or run name plus suffix indicating statistic)
     - splitname (str): evaluated split label
     - resultsdir (str): output directory (defaults to RESULTSDIR)
     Returns:
@@ -158,24 +169,29 @@ def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Evaluate NN models on a chosen split.')
-    parser.add_argument('--split',required=True,choices=['norm_valid','norm_test'],help='Which split to evaluate: `norm_valid` or `norm_test`.')
+    parser.add_argument('--split',required=True,choices=['normvalid','normtest'],help='Which split to evaluate: `normvalid` or `normtest`.')
     args = parser.parse_args()
-    try:
-        explookup = {experiment['exp_name']:experiment for experiment in EXPERIMENTS}
-        logger.info(f'Evaluating NN models on {args.split} set...')
-        for run in RUNS:
-            runname  = run['run_name']
-            expname  = run['exp_name']
-            loss     = run['loss']
-            exp         = explookup[expname]
-            inputvars   = exp['input_vars']
-            description = exp['description']
-            logger.info(f'   Evaluating {description} using {loss.upper()} loss')
-            X,ytemplate = load(args.split,inputvars)
-            model = fetch(runname,X.shape[1])
+    explookup = {experiment['exp_num']:experiment for experiment in EXPERIMENTS}
+    logger.info(f'Evaluating NN models on {args.split} set...')
+    for run in RUNS:
+        runname  = run['run_name']
+        expnum   = run['exp_num']
+        loss     = run['loss']
+        exp         = explookup[expnum]
+        inputvars   = exp['input_vars']
+        description = exp['description']
+        logger.info(f'   Evaluating {description} using {loss.upper()} loss')
+        X,ytemplate = load(args.split,inputvars)
+        checkpoints = get_checkpoints(runname)
+        memberpreds = []
+        for checkpoint in checkpoints:
+            model = fetch(checkpoint,X.shape[1])
             ypred = predict(model,X,ytemplate)
-            save(ypred,runname,args.split)
-            del X,ytemplate,model,ypred
-        logger.info('Script completed successfully!')
-    except Exception as e:
-        logger.error(f'An unexpected error occurred: {str(e)}')
+            memberpreds.append(ypred)
+            del model,ypred
+        ensemble = xr.concat(memberpreds,dim='member')
+        ensemble = ensemble.assign_coords(member=np.arange(len(memberpreds)))
+        ensemble.name = 'pr'
+        ensemble.attrs = dict(long_name='Ensemble NN-predicted precipitation rate',units='mm/hr')
+        save(ensemble,f'{runname}_ensemble',args.split)
+        del X,ytemplate,memberpreds,ensemble

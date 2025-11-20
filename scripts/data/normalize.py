@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(m
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore')
 
-FILEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-sr/data/splits'
+FILEDIR     = '/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/splits'
 TARGETVAR   = 'pr'
 CHUNKSIZE   = 2208   
 
@@ -76,10 +76,38 @@ def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
     logger.info(f'   Wrote statistics to {filename}')
     return stats
 
+# def normalize(da,stats,levmask,targetvar=TARGETVAR):
+#     '''
+#     Purpose: Z-score normalize an xr.DataArray using provided statistics and an optional mask. For 4D inputs, multiply by the 
+#     level mask to gate invalid pressure levels to 0. For the target variable, we log1p-transform then normalize.  
+#     Args:
+#     - da (xr.DataArray): variable DataArray to normalize
+#     - stats (dict): normalization mean/std
+#     - levmask (np.ndarray): below-surface level mask
+#     - targetvar (str): target variable name (defaults to TARGETVAR)
+#     Returns:
+#     - xr.DataArray: normalized DataArray
+#     '''
+#     arr = reshape(da)
+#     if da.name==targetvar:
+#         arr  = np.log1p(arr)
+#         norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
+#     else:
+#         norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
+#         if 'lev' in da.dims:
+#             norm = norm*levmask
+#     normda   = xr.DataArray(norm.astype(np.float32).reshape(da.shape),dims=da.dims,coords=da.coords,name=da.name)
+#     longname = da.attrs.get('long_name',da.name)
+#     if da.name==targetvar:
+#         normda.attrs = dict(long_name=f'{longname} (log1p-transform and Z-score normalization)',units='N/A')
+#     else:
+#         normda.attrs = dict(long_name=f'{longname} (Z-score normalization)',units='N/A')
+#     return normda
+
 def normalize(da,stats,levmask,targetvar=TARGETVAR):
     '''
     Purpose: Z-score normalize an xr.DataArray using provided statistics and an optional mask. For 4D inputs, multiply by the 
-    level mask to gate invalid pressure levels to 0. For the target variable, we log1p-transform then normalize.  
+    level mask to gate invalid pressure levels to 0.
     Args:
     - da (xr.DataArray): variable DataArray to normalize
     - stats (dict): normalization mean/std
@@ -88,20 +116,13 @@ def normalize(da,stats,levmask,targetvar=TARGETVAR):
     Returns:
     - xr.DataArray: normalized DataArray
     '''
-    arr = reshape(da)
-    if da.name==targetvar:
-        arr  = np.log1p(arr)
-        norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
-    else:
-        norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
-        if 'lev' in da.dims:
-            norm = norm*levmask
+    arr  = reshape(da)
+    norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
+    if 'lev' in da.dims:
+        norm = norm*levmask
     normda   = xr.DataArray(norm.astype(np.float32).reshape(da.shape),dims=da.dims,coords=da.coords,name=da.name)
     longname = da.attrs.get('long_name',da.name)
-    if da.name==targetvar:
-        normda.attrs = dict(long_name=f'{longname} (log1p-transform and Z-score normalization)',units='0-1')
-    else:
-        normda.attrs = dict(long_name=f'{longname} (Z-score normalization)',units='0-1')
+    normda.attrs = dict(long_name=f'{longname} (Z-score normalization)',units='N/A')
     return normda
 
 def process(splitname,stats,chunksize=CHUNKSIZE,filedir=FILEDIR):
@@ -135,30 +156,26 @@ def process(splitname,stats,chunksize=CHUNKSIZE,filedir=FILEDIR):
             'shuffle':True,
             'chunksizes':chunks,
             'dtype':('uint8' if varname=='levmask' else da.dtype)}
-    filename = f'norm_{splitname}.h5'
+    filename = f'norm{splitname}.h5'
     filepath = os.path.join(filedir,filename)
-    logger.info(f'   Attempting to save {filename} ...')
+    logger.info(f'      Attempting to save {filename} ...')
     try:
         ds.to_netcdf(filepath,engine='h5netcdf',encoding=encoding)
         with xr.open_dataset(filepath,engine='h5netcdf') as _:
             pass
-        logger.info('      File write successful')
+        logger.info('         File write successful')
         return True
     except Exception:
-        logger.exception('      Failed to save or verify')
+        logger.exception('         Failed to save or verify')
         return False
 
 if __name__=='__main__':
-    try:
-        logger.info('Loading the training set...')
-        trainds = load('train')
-        logger.info('Computing training set normalization statistics...')
-        stats = calc_save_stats(trainds)
-        del trainds
-        logger.info('Creating normalized splits and saving...')
-        for splitname in ('train','valid','test'):
-            process(splitname,stats)
-        del stats
-        logger.info('Script completed successfully!')
-    except Exception as e:
-        logger.error(f'An unexpected error occurred: {str(e)}')
+    logger.info('Loading the training set...')
+    trainds = load('train')
+    logger.info('Computing training set normalization statistics...')
+    stats = calc_save_stats(trainds)
+    del trainds
+    logger.info('Creating normalized splits and saving...')
+    for splitname in ('train','valid','test'):
+        process(splitname,stats)
+    del stats

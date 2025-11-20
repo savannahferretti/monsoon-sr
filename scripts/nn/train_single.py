@@ -67,7 +67,7 @@ def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR
     '''
     Purpose: Load in a normalized training or validation split and build a 2D feature matrix for the NN. 
     Args:
-    - splitname (str): 'norm_train' | 'norm_valid'
+    - splitname (str): 'normtrain' | 'normvalid'
     - inputvars (list[str]): list of input variables
     - landvar (str): land fraction variable name (defaults to LANDVAR)
     - targetvar (str): target variable name (defaults to TARGETVAR)
@@ -75,8 +75,8 @@ def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR
     Returns:
     - tuple[torch.FloatTensor,torch.FloatTensor]: 2D input/target tensors
     '''
-    if splitname not in ('norm_train','norm_valid'):
-        raise ValueError('Splitname must be `norm_train` or `norm_valid`.')
+    if splitname not in ('normtrain','normvalid'):
+        raise ValueError('Splitname must be `normtrain` or `normvalid`.')
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
     varlist  = list(inputvars)+[landvar]+[targetvar]
@@ -117,16 +117,16 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,criterion,batchsize=BATCHSIZE,
     optimizer = torch.optim.Adam(model.parameters(),lr=learningrate)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,max_lr=1e-3,epochs=epochs,steps_per_epoch=len(trainloader),pct_start=0.1,anneal_strategy='cos')
     wandb.init(
-        project='All Experiments (LR) with MSE Loss',
+        project='All-Experiments-MSE-vs.-MAE-Loss',
         name=runname,
         config={
             'Epochs':epochs,
             'Batch size':batchsize,
             'Initial learning rate':learningrate,
             'Early stopping patience':patience})
-    bestloss  = float('inf')
-    bestepoch = 0
-    noimprove = 0
+    bestloss   = float('inf')
+    bestepoch  = 0
+    noimprove  = 0
     starttime = time.time()
     for epoch in range(1,epochs+1):
         model.train()
@@ -176,7 +176,7 @@ def fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,criterion,batchsize=BATCHSIZE,
 
 def save(modelstate,runname,modeldir=MODELDIR):
     '''
-    Purpose: Save trained model parameters for the best model (lowest validation loss) to a PyTorch checkpoint file in the specified 
+    Purpose: Save trained model parameters for our best (lowes balidation loss) model to a PyTorch checkpoint file in the specified 
     directory, then verify the write by reopening.
     Args:
     - modelstate (dict): model.state_dict() to save
@@ -199,22 +199,18 @@ def save(modelstate,runname,modeldir=MODELDIR):
         return False
 
 if __name__=='__main__':
-    try:
-        explookup = {experiment['exp_name']:experiment for experiment in EXPERIMENTS}
-        logger.info('Training and saving NN models...')
-        for run in RUNS:
-            runname  = run['run_name']
-            expname  = run['exp_name']
-            loss     = run['loss']
-            exp         = explookup[expname]
-            inputvars   = exp['input_vars']
-            description = exp['description']
-            logger.info(f'   Training {description} using {loss.upper()} loss')
-            Xtrain,ytrain = load('norm_train',inputvars)
-            Xvalid,yvalid = load('norm_valid',inputvars)
-            model = NNModel(Xtrain.shape[1])
-            fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,get_criterion(loss))
-            del model,Xtrain,Xvalid,ytrain,yvalid
-        logger.info('Script completed successfully!')
-    except Exception as e:
-        logger.error(f'An unexpected error occurred: {str(e)}')
+    explookup = {experiment['exp_num']:experiment for experiment in EXPERIMENTS}
+    logger.info('Training and saving NN models...')
+    for run in RUNS:
+        runname = run['run_name']
+        expnum  = run['exp_num']
+        loss    = run['loss']
+        exp         = explookup[expnum]
+        inputvars   = exp['input_vars']
+        description = exp['description']
+        logger.info(f'   Training {description} using {loss.upper()} loss')
+        Xtrain,ytrain = load('normtrain',inputvars)
+        Xvalid,yvalid = load('normvalid',inputvars)
+        model = NNModel(Xtrain.shape[1])
+        fit(model,runname,Xtrain,Xvalid,ytrain,yvalid,get_criterion(loss))
+        del model,Xtrain,Xvalid,ytrain,yvalid

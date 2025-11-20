@@ -81,7 +81,7 @@ def predict(model,x,lf=None):
     '''
     ypredflat = model.forward(x,lf=lf if model.mode=='regional' else None)
     ypred = xr.DataArray(ypredflat.reshape(x.shape),dims=x.dims,coords=x.coords,name='pr')
-    ypred.attrs = dict(long_name='POD-predicted precipitation',units='mm/hr')
+    ypred.attrs = dict(long_name='POD-predicted precipitation rate',units='mm/hr')
     return ypred
 
 def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
@@ -98,33 +98,29 @@ def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
     os.makedirs(resultsdir,exist_ok=True)
     filename = f'pod_{runname}_{splitname}_pr.nc'
     filepath = os.path.join(resultsdir,filename)
-    logger.info(f'   Attempting to save {filename}...')
+    logger.info(f'      Attempting to save {filename}...')
     try:
         ypred.to_netcdf(filepath,engine='h5netcdf')
         with xr.open_dataset(filepath,engine='h5netcdf') as _:
             pass
-        logger.info('      File write successful')
+        logger.info('         File write successful')
         return True
     except Exception:
-        logger.exception('      Failed to save or verify')
+        logger.exception('         Failed to save or verify')
         return False
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Evaluate POD ramp models on a chosen data split.')
     parser.add_argument('--split',required=True,choices=['valid','test'],help='Which split to evaluate: `valid` or `test`.')
     args = parser.parse_args()
-    try:
-        logger.info(f'Loading {args.split} data split...')
-        x,lf = load(args.split)
-        logger.info('Evaluating POD models...')
-        for run in RUNCONFIGS:
-            runname     = run['run_name']
-            description = run['description']
-            logger.info(f'   Evaluating {description}')
-            model = fetch(runname)
-            ypred = predict(model,x,lf=lf)
-            save(ypred,runname,args.split)
-            del model,ypred
-        logger.info('Script execution completed successfully!')
-    except Exception as e:
-        logger.error(f'An unexpected error occurred: {str(e)}')
+    logger.info(f'Loading {args.split} data split...')
+    x,lf = load(args.split)
+    logger.info('Evaluating POD models...')
+    for run in RUNCONFIGS:
+        runname     = run['run_name']
+        description = run['description']
+        logger.info(f'   Evaluating {description}')
+        model = fetch(runname)
+        ypred = predict(model,x,lf=lf)
+        save(ypred,runname,args.split)
+        del model,ypred
