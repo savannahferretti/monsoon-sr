@@ -3,33 +3,16 @@
     "filedir":"/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/splits",
     "modeldir":"/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/models/nn",
     "resultsdir":"/global/cfs/cdirs/m4334/sferrett/monsoon-discovery/data/results"},
-  "dataparams":{
-    "targetvar":"pr",
-    "landvar":"lf"},
-  "experiments":[
-    {"exp_num":"1","input_vars":["bl"],"description":"Experiment 1"},
-    {"exp_num":"2","input_vars":["cape","subsat"],"description":"Experiment 2"},
-    {"exp_num":"3","input_vars":["thetaeprime"],"description":"Experiment 3"},
-    {"exp_num":"4","input_vars":["thetaeplus"],"description":"Experiment 4"},
-    {"exp_num":"5","input_vars":["thetaeprime","thetaeplus"],"description":"Experiment 5"},
-    {"exp_num":"6","input_vars":["t","q"],"description":"Experiment 6"}],
-  "trainparams":{
+  "params":{
+      "targetvar":"pr",
       "epochs":20,
       "batchsize":2208,
       "learningrate":0.001,
       "patience":5},
-  "evalparams":{
-      "batchsize":2208},
   "runs":[
-    {"run_name":"exp1_mse","exp_num":"1","loss":"mse"},
-    {"run_name":"exp2_mse","exp_num":"2","loss":"mse"},
-    {"run_name":"exp3_mse","exp_num":"3","loss":"mse"},
-    {"run_name":"exp4_mse","exp_num":"4","loss":"mse"},
-    {"run_name":"exp5_mse","exp_num":"5","loss":"mse"},
-    {"run_name":"exp6_mse","exp_num":"6","loss":"mse"},
-    {"run_name":"exp1_mae","exp_num":"1","loss":"mae"},
-    {"run_name":"exp2_mae","exp_num":"2","loss":"mae"},
-    {"run_name":"exp3_mae","exp_num":"3","loss":"mae"},
-    {"run_name":"exp4_mae","exp_num":"4","loss":"mae"},
-    {"run_name":"exp5_mae","exp_num":"5","loss":"mae"},
-    {"run_name":"exp6_mae","exp_num":"6","loss":"mae"}]}
+    {"run_name":"mse_lf_bl","input_vars":["lf","bl"],"description":"LF + $\\mathit{B_L}$"},
+    {"run_name":"mse_lf_cape_subsat","input_vars":["lf","cape","subsat"],"description":"LF + $CAPE_L$ + $SUBSAT_L$"},
+    {"run_name":"mse_lf_thetaeprime","input_vars":["lf","thetaeprime"],"description":"LF + $\\mathit{\\theta_{e}}\\prime$"},
+    {"run_name":"mse_lf_thetaeplus","input_vars":["lf","thetaeplus"],"description":"LF + $\\mathit{\\theta_{e}}^+$"},
+    {"run_name":"mse_lf_thetaeprime_thetaeplus","input_vars":["lf","thetaeprime","thetaeplus"],"description":"LF + $\\mathit{\\theta_{e}}\\prime$ + $\\mathit{\\theta_{e}}^+$"},
+    {"run_name":"mse_lf_t_q","input_vars":["lf","t","q"],"description":"LF + $\\mathit{T}$ + $\\mathit{q}$"}]}

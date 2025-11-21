@@ -59,8 +59,6 @@ def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
     for varname in trainds.data_vars:
         if varname=='levmask':
             continue
-        if varname=='lf':
-            continue
         da  = trainds[varname]
         arr = reshape(da)
         if varname==targetvar:
@@ -76,38 +74,10 @@ def calc_save_stats(trainds,targetvar=TARGETVAR,filedir=FILEDIR):
     logger.info(f'   Wrote statistics to {filename}')
     return stats
 
-# def normalize(da,stats,levmask,targetvar=TARGETVAR):
-#     '''
-#     Purpose: Z-score normalize an xr.DataArray using provided statistics and an optional mask. For 4D inputs, multiply by the 
-#     level mask to gate invalid pressure levels to 0. For the target variable, we log1p-transform then normalize.  
-#     Args:
-#     - da (xr.DataArray): variable DataArray to normalize
-#     - stats (dict): normalization mean/std
-#     - levmask (np.ndarray): below-surface level mask
-#     - targetvar (str): target variable name (defaults to TARGETVAR)
-#     Returns:
-#     - xr.DataArray: normalized DataArray
-#     '''
-#     arr = reshape(da)
-#     if da.name==targetvar:
-#         arr  = np.log1p(arr)
-#         norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
-#     else:
-#         norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
-#         if 'lev' in da.dims:
-#             norm = norm*levmask
-#     normda   = xr.DataArray(norm.astype(np.float32).reshape(da.shape),dims=da.dims,coords=da.coords,name=da.name)
-#     longname = da.attrs.get('long_name',da.name)
-#     if da.name==targetvar:
-#         normda.attrs = dict(long_name=f'{longname} (log1p-transform and Z-score normalization)',units='N/A')
-#     else:
-#         normda.attrs = dict(long_name=f'{longname} (Z-score normalization)',units='N/A')
-#     return normda
-
 def normalize(da,stats,levmask,targetvar=TARGETVAR):
     '''
     Purpose: Z-score normalize an xr.DataArray using provided statistics and an optional mask. For 4D inputs, multiply by the 
-    level mask to gate invalid pressure levels to 0.
+    level mask to gate invalid pressure levels to 0. For the target variable, we log1p-transform then normalize.  
     Args:
     - da (xr.DataArray): variable DataArray to normalize
     - stats (dict): normalization mean/std
@@ -116,13 +86,20 @@ def normalize(da,stats,levmask,targetvar=TARGETVAR):
     Returns:
     - xr.DataArray: normalized DataArray
     '''
-    arr  = reshape(da)
-    norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
-    if 'lev' in da.dims:
-        norm = norm*levmask
+    arr = reshape(da)
+    if da.name==targetvar:
+        arr  = np.log1p(arr)
+        norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
+    else:
+        norm = (arr-stats[f'{da.name}_mean'])/stats[f'{da.name}_std']
+        if 'lev' in da.dims:
+            norm = norm*levmask
     normda   = xr.DataArray(norm.astype(np.float32).reshape(da.shape),dims=da.dims,coords=da.coords,name=da.name)
     longname = da.attrs.get('long_name',da.name)
-    normda.attrs = dict(long_name=f'{longname} (Z-score normalization)',units='N/A')
+    if da.name==targetvar:
+        normda.attrs = dict(long_name=f'{longname} (log1p-transform and Z-score normalization)',units='N/A')
+    else:
+        normda.attrs = dict(long_name=f'{longname} (Z-score normalization)',units='N/A')
     return normda
 
 def process(splitname,stats,chunksize=CHUNKSIZE,filedir=FILEDIR):
@@ -143,8 +120,6 @@ def process(splitname,stats,chunksize=CHUNKSIZE,filedir=FILEDIR):
     for varname in splitds.data_vars:
         if varname=='levmask':
             datavars['levmask'] = splitds['levmask'].astype('uint8')
-        elif varname=='lf':
-            datavars['lf'] = splitds['lf']
         else:
             datavars[varname] = normalize(splitds[varname],stats,levmask)
     ds = xr.Dataset(datavars)

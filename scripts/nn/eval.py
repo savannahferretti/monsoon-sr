@@ -21,10 +21,8 @@ with open('configs.json','r',encoding='utf8') as f:
 FILEDIR     = CONFIGS['paths']['filedir']
 MODELDIR    = CONFIGS['paths']['modeldir']
 RESULTSDIR  = CONFIGS['paths']['resultsdir']
-TARGETVAR   = CONFIGS['dataparams']['targetvar']
-LANDVAR     = CONFIGS['dataparams']['landvar']
-BATCHSIZE   = CONFIGS['evalparams']['batchsize']
-EXPERIMENTS = CONFIGS['experiments']
+TARGETVAR   = CONFIGS['params']['targetvar']
+BATCHSIZE   = CONFIGS['params']['batchsize']
 RUNS        = CONFIGS['runs']
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -44,13 +42,12 @@ def reshape(da):
         arr = da.transpose('time','lat','lon').values.reshape(-1,1)
     return arr
     
-def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR):
+def load(splitname,inputvars,targetvar=TARGETVAR,filedir=FILEDIR):
     '''
     Purpose: Load in a normalized validation or test split and build a 2D feature matrix for the NN. 
     Args:
     - splitname (str): 'normvalid' | 'normtest'
     - inputvars (list[str]): list of input variables
-    - landvar (str): land fraction variable name (defaults to LANDVAR)
     - targetvar (str): target variable name (defaults to TARGETVAR)
     - filedir (str): directory containing split files (defaults to FILEDIR)
     Returns:
@@ -60,10 +57,9 @@ def load(splitname,inputvars,landvar=LANDVAR,targetvar=TARGETVAR,filedir=FILEDIR
         raise ValueError('Splitname must be `normvalid` or `normtest`.')
     filename = f'{splitname}.h5'
     filepath = os.path.join(filedir,filename)
-    varlist  = list(inputvars)+[landvar]+[targetvar]
+    varlist  = list(inputvars)+[targetvar]
     ds = xr.open_dataset(filepath,engine='h5netcdf')[varlist]
     Xlist = [reshape(ds[inputvar]) for inputvar in inputvars]
-    Xlist.append(reshape(ds[landvar]))
     X = np.concatenate(Xlist,axis=1) if len(Xlist)>1 else Xlist[0]
     X = torch.tensor(X,dtype=torch.float32)
     ytemplate = ds[targetvar]
@@ -78,7 +74,7 @@ def get_checkpoints(runname,modeldir=MODELDIR):
     Returns:
     - list[str]: list of checkpoint filepaths matching the run name
     '''
-    pattern     = os.path.join(modeldir,f'nn_{runname}_epoch*.pth')
+    pattern     = os.path.join(modeldir,f'nn_{runname}_*.pth')
     checkpoints = sorted(glob.glob(pattern))
     return checkpoints
 
@@ -112,7 +108,7 @@ def denormalize(ynormflat,targetvar=TARGETVAR,filedir=FILEDIR):
     mean = float(stats[f'{targetvar}_mean'])
     std  = float(stats[f'{targetvar}_std'])
     ylog = ynormflat*std+mean
-    y = np.expm1(ylog)
+    y = np.exp1m(ylog)
     return y
 
 def predict(model,X,ytemplate,batchsize=BATCHSIZE,device=DEVICE):
@@ -144,9 +140,9 @@ def predict(model,X,ytemplate,batchsize=BATCHSIZE,device=DEVICE):
 
 def save(ypred,runname,splitname,resultsdir=RESULTSDIR):
     '''
-    Purpose: Save an xr.DataArray of predicted precipitation (or derived ensemble statistic) to a NetCDF file, then verify the write by reopening.
+    Purpose: Save an xr.Dataset of an ensemble of predicted precipitation to a NetCDF file, then verify the write by reopening.
     Args:
-    - ypred (xr.DataArray): 3D DataArray of predicted precipitation or an ensemble statistic
+    - ypred (xr.Dataset): Dataset of predicted precipitation with a 'member' dimension
     - runname (str): model run name (or run name plus suffix indicating statistic)
     - splitname (str): evaluated split label
     - resultsdir (str): output directory (defaults to RESULTSDIR)
@@ -171,16 +167,12 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Evaluate NN models on a chosen split.')
     parser.add_argument('--split',required=True,choices=['normvalid','normtest'],help='Which split to evaluate: `normvalid` or `normtest`.')
     args = parser.parse_args()
-    explookup = {experiment['exp_num']:experiment for experiment in EXPERIMENTS}
     logger.info(f'Evaluating NN models on {args.split} set...')
     for run in RUNS:
-        runname  = run['run_name']
-        expnum   = run['exp_num']
-        loss     = run['loss']
-        exp         = explookup[expnum]
-        inputvars   = exp['input_vars']
-        description = exp['description']
-        logger.info(f'   Evaluating {description} using {loss.upper()} loss')
+        runname     = run['run_name']
+        inputvars   = run['input_vars']
+        description = run['description']
+        logger.info(f'   Evaluating {runname}')
         X,ytemplate = load(args.split,inputvars)
         checkpoints = get_checkpoints(runname)
         memberpreds = []
